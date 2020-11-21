@@ -10,3 +10,4 @@ edition = "2018"
 ansi_term = "0.12"
 num_cpus = "1.0"
 clap = "2.33"
+pcap = { version = "0.7", features = ["tokio"] }
