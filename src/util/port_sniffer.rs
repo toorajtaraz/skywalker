@@ -1,15 +1,12 @@
-use std::env;
 use std::io::{self, Write};
 use std::net::{IpAddr, TcpStream, SocketAddr};
-use std::str::FromStr;
-use std::process;
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
 const MAX: u16 = 65535;
 
 fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32) {
-    let mut port: u16 = id * steps;
+    let port: u16 = id * steps;
     for i in 1..=steps {
         if  port > MAX{         
             break;
@@ -35,7 +32,7 @@ fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32) {
 pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8) {
     let (tx, rx) = channel();
     let number_of_slots = ((MAX / 1000) as f64).ceil() as u16;
-    for i in 0..1000{
+    for i in 0..threads{
         let tx = tx.clone();
         thread::spawn(move || {
             scan(tx, i , number_of_slots, address, timeout);
