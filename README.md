@@ -12,6 +12,25 @@ sudo cp ./target/x86_64-unknown-linux-gnu/release/skywalker /bin/
 ```
 or just simply copy provided binary to /bin directory or add to your desired folder in PATH.
 
+## Abilities
+Port sniffer:
+
+Currently we support multi thread port sniffing with different levels of verbosity, in near future we will add famous port scan and range filter support.
+
+Packet sniffer:
+
+At the moment there are plenty protocols that we support :
+- Ethernet
+- IPv4
+- IPv6
+- Arp (Address Resolution Protocol)
+- Tcp (TLS, encrypted and plaintext)
+- Udp (DNS queries and answers)
+ 
+There is an option for you too see a list containing all your interfaces.
+
+
+You can capture packages from all of your interfaces, even bus, Dbus and bluetooth, but non network-related interfaces will not be parsed but still you can review raw payload and length of packet and time stamps.
 ## Usage
 
 ```bash
@@ -23,7 +42,7 @@ skywalker --help
 /____/_/|_|\__, / |__/|__/\__,_/_/_/|_|\___/_/     
           /____/                                  
 
-0.1.1
+0.1.2
 Tooraj Taraz <tooraj.info@gmail.com>
 SKYWALKER is a simple port and packet sniffer.
 
@@ -53,3 +72,4 @@ ARGS:
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 Please make sure to update tests as appropriate.
+
