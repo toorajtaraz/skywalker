@@ -49,20 +49,20 @@ fn capture(dev: Device, verbosity: u8, process: bool) {
                                 packet.print(verbosity);
                             },
                             _ => {
-                                println!("{}", Color::Red.paint("something went wrong while capturing packets. please make sure you are executing this command as sudo."));
+                                println!("{}", Color::Red.paint("something went wrong while capturing packets. please make sure you are executing this command as sudo.(NOT FOR DBUS, USE NORMAL USER FOR DBUS)"));
                                 return;
                             }
                         }
                     }
                 },
                 _ => {
-                    println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."));
+                    println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo.(NOT FOR DBUS, USE NORMAL USER FOR DBUS)"));
                     return;
                 }
             }
         },
         _ => {
-            println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."));
+            println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo.(NOT FOR DBUS, USE NORMAL USER FOR DBUS)"));
             return;
         }
     };
