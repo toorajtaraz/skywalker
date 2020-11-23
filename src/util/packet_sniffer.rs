@@ -83,7 +83,7 @@ pub fn listen(index: u16, verbosity: u8) {
     println!("{}", Color::Red.bold().paint("LISTENING..."));
     let mut count = 1;
     for dev in devices {
-       if index != 0 && count == index - 1 {
+       if index != 0 && count == index {
             if !(dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any")) {
                 capture(dev, verbosity, false);
                 return;
