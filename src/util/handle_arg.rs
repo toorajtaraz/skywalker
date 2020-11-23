@@ -72,7 +72,7 @@ pub fn get_args() -> Result<Arguments, String> {
                                .help("Capture packages from interface with index you get from interface list. Give 0 for default interface.")
                                .takes_value(true))
                           .arg(Arg::with_name("IP")
-                               .help("Sets the ip address for for port sniffing")
+                               .help("Sets the ip address for port sniffing")
                                .required(false)
                                .index(1))
                           .arg(Arg::with_name("verbose")
