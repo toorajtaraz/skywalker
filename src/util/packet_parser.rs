@@ -439,3 +439,21 @@ fn parse_dns(data: &[u8], packet: &mut Packet) -> Result<(), String> {
     }
     Ok(())
 }
+
+pub fn print_raw(len: u32, timestamp: String, data: Vec<u8>, verbosity: u8) {
+    println!("{}", Color::Red.bold().paint("PRINTING RAW: "));
+    println!("{}", Color::Green.paint(format!("AT TIME: {}", timestamp).as_str()));
+    println!("{}{}", Color::Blue.paint("PACKET: "), Color::Red.paint("{"));
+    println!("\tlength: {}", len);
+    if verbosity > 1 {
+       println!("\t{}", Color::Red.paint("NOT PROCESSED PAYLOADS: {"));
+        for chunk in data.chunks(50) {
+            let stringed = String::from_utf8_lossy(chunk);
+            let stringed = stringed.split_whitespace().collect::<Vec<&str>>();
+            let stringed = stringed.concat();
+            println!("\t\t{}", Color::White.bold().paint(format!("{}", stringed).as_str()));
+        }
+       println!("\t{}", Color::Red.paint("}"));
+    }
+    println!("{}", Color::Red.paint("}"));
+}
