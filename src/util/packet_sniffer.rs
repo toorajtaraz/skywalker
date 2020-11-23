@@ -3,7 +3,7 @@ extern crate pcap;
 use pcap::Device;
 extern crate ansi_term;
 use ansi_term::Color;
-use crate::packet_parser::parse_packet;
+use crate::packet_parser::{parse_packet, self};
 
 pub fn print_devices() {
     let mut i : u16 = 1;
@@ -27,6 +27,47 @@ pub fn print_devices() {
     println!("{}", Color::Green.paint(format!("{} DEVS WERE FOUND!", i - 1).as_str()))
 }
 
+fn capture(dev: Device, verbosity: u8, process: bool) {
+    match pcap::Capture::from_device(dev) {
+        Ok(capture) => {
+            match capture.open() {
+                Ok(mut opened) => {
+                    loop {
+                        match opened.next() {
+                            Ok(packet) => {
+                                if !process {
+                                   packet_parser::print_raw(packet.header.len, format!("{}.{:06}", &packet.header.ts.tv_sec, &packet.header.ts.tv_usec), packet.data.to_owned(), verbosity);
+                                   continue;
+                                }
+                                let data = packet.data.to_owned();
+                                let len = packet.header.len;
+                                let ts : String = format!(
+                                        "{}.{:06}",
+                                        &packet.header.ts.tv_sec, &packet.header.ts.tv_usec
+                                    );
+                                let packet = parse_packet(data , len, ts);
+                                packet.print(verbosity);
+                            },
+                            _ => {
+                                println!("{}", Color::Red.paint("something went wrong while capturing packets. please make sure you are executing this command as sudo."));
+                                return;
+                            }
+                        }
+                    }
+                },
+                _ => {
+                    println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."));
+                    return;
+                }
+            }
+        },
+        _ => {
+            println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."));
+            return;
+        }
+    };
+}
+
 pub fn listen(index: u16, verbosity: u8) {
     let devices = match Device::list() {
         Ok(devs) => devs,
@@ -43,71 +84,15 @@ pub fn listen(index: u16, verbosity: u8) {
     let mut count = 1;
     for dev in devices {
        if index != 0 && count == index - 1 {
-            match pcap::Capture::from_device(dev) {
-                Ok(capture) => {
-                    match capture.open() {
-                        Ok(mut opened) => {
-                            loop {
-                                match opened.next() {
-                                    Ok(packet) => {
-                                        let data = packet.data.to_owned();
-                                        let len = packet.header.len;
-                                        let ts : String = format!(
-                                                "{}.{:06}",
-                                                &packet.header.ts.tv_sec, &packet.header.ts.tv_usec
-                                            );
-                                        let packet = parse_packet(data , len, ts);
-                                        packet.print(verbosity);
-                                    },
-                                    _ => {
-                                        println!("{}", Color::Red.paint("something went wrong while capturing packets. please make sure you are executing this command as sudo."));
-                                        break;
-                                    }
-                                }
-                            }
-                        },
-                        _ => println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."))
-                    }
-                },
-                _ => println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."))
-            };
+            if !(dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any")) {
+                capture(dev, verbosity, false);
+                return;
+            }
+            capture(dev, verbosity, true);
        } else if index == 0 {
            if dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any") {
-                match pcap::Capture::from_device(dev) {
-                    Ok(capture) => {
-                        match capture.open() {
-                            Ok(mut opened) => {
-                                loop {
-                                    match opened.next() {
-                                        Ok(packet) => {
-                                            let data = packet.data.to_owned();
-                                            let len = packet.header.len;
-                                            let ts : String = format!(
-                                                    "{}.{:06}",
-                                                    &packet.header.ts.tv_sec, &packet.header.ts.tv_usec
-                                                );
-                                            let packet = parse_packet(data , len, ts);
-                                            packet.print(verbosity);
-                                        },
-                                        _ => {
-                                            println!("{}", Color::Red.paint("something went wrong while capturing packets. please make sure you are executing this command as sudo."));
-                                            break;
-                                        }
-                                    }
-                                }
-                            },
-                            _ => {
-                                println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."));
-                                return;
-                            }
-                        }
-                    },
-                    _ => { 
-                        println!("{}", Color::Red.paint("something went wrong while capturing packets.  please make sure you are executing this command as sudo."));
-                        return;
-                    }
-                };
-               break; 
+                capture(dev, verbosity, true);
+                return; 
            }
            continue;
        }
