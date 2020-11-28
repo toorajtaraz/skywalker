@@ -89,6 +89,7 @@ pub fn listen(index: u16, verbosity: u8) {
                 return;
             }
             capture(dev, verbosity, true);
+            return;
        } else if index == 0 {
            if dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any") {
                 capture(dev, verbosity, true);
@@ -101,34 +102,4 @@ pub fn listen(index: u16, verbosity: u8) {
     
     }
     println!("{}", Color::Red.bold().paint("NO SUITABLE INTERFACE WERE FOUND!"));
-}
-fn main___() {
-    match pcap::Device::list() {
-        Ok(dev) => { 
-            for device in dev {
-                println!("Found device! {:?}", device);
-                if device.name.contains("wl") { 
-                    match pcap::Capture::from_device(device) {
-                        Ok(capture) => {
-                            match capture.open() {
-                                Ok(mut opened) => {
-                                    loop {
-                                        match opened.next() {
-                                            Ok(packet) => {
-                                                println!("{:?}", packet)
-                                            },
-                                            _ => (break)
-                                        }
-                                    }
-                                },
-                                _ => ()
-                            }
-                        },
-                        _ => ()
-                    };
-                }
-            }
-        },
-        _ => {()}
-    }
 }

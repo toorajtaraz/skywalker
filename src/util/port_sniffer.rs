@@ -2,6 +2,7 @@ use std::io::{self, Write};
 use std::net::{IpAddr, TcpStream, SocketAddr};
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
+use ansi_term::Color;
 
 const MAX: u16 = 65535;
 
@@ -43,8 +44,8 @@ pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8) {
     for p in rx {
         out.push(p);
     }    
-    println!("");
     out.sort();
+    println!("{}", Color::Cyan.paint("RESULTS: "));
     let mut count : u16 = 0;
     for v in out {
         if v.contains("timed") {
@@ -53,10 +54,10 @@ pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8) {
                 continue;
             }
         }
-        println!("{}", v);
+        println!("{}", Color::Green.paint(format!("{}", v).as_str()));
     }
     if verbose >= 1 {
-        println!("{} ports timed out.", count);
+        println!("{}", Color::Red.bold().paint(format!("{} ports timed out.", count).as_str()));
     }
 }
 
