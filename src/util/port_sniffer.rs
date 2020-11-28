@@ -6,7 +6,7 @@ use ansi_term::Color;
 
 const MAX: u16 = 65535;
 
-fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32) {
+fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32, verbosity: u8) {
     let port: u16 = id * steps;
     for i in 1..=steps {
         if  port > MAX{         
@@ -15,14 +15,25 @@ fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32) {
         let sa = SocketAddr::new(addr, port + i); 
         match TcpStream::connect_timeout(&sa, std::time::Duration::new(0, timeout)) {
             Ok(_) => {
-                print!(".");
+                print!("{}", Color::Green.paint("."));
                 io::stdout().flush().unwrap();
                 tx.send(std::format!("{} is open.", port + i)).unwrap();
             },
             Err(e) => {
                 match e.kind() {
-                    io::ErrorKind::TimedOut =>  tx.send(std::format!("port {} timed out.", port + i)).unwrap(),
-                    _ => ()
+                    io::ErrorKind::TimedOut =>  {
+                        if verbosity >= 1 {
+                            print!("{}", Color::Red.paint("."));
+                            io::stdout().flush().unwrap();
+                        }
+                        tx.send(std::format!("port {} timed out.", port + i)).unwrap();
+                    },
+                    _ => {
+                        if verbosity >= 1 {
+                            print!("{}", Color::Red.paint("."));
+                            io::stdout().flush().unwrap();
+                        }
+                    }
                 }
             }     
         }
@@ -32,11 +43,11 @@ fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32) {
 
 pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8) {
     let (tx, rx) = channel();
-    let number_of_slots = ((MAX / 1000) as f64).ceil() as u16;
+    let number_of_slots = ((MAX / threads) as f64).ceil() as u16;
     for i in 0..threads{
         let tx = tx.clone();
         thread::spawn(move || {
-            scan(tx, i , number_of_slots, address, timeout);
+            scan(tx, i , number_of_slots, address, timeout, verbose);
         });
     }
     let mut out = vec![];
@@ -45,7 +56,7 @@ pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8) {
         out.push(p);
     }    
     out.sort();
-    println!("{}", Color::Cyan.paint("RESULTS: "));
+    println!("\n{}", Color::Cyan.paint("RESULTS: "));
     let mut count : u16 = 0;
     for v in out {
         if v.contains("timed") {
