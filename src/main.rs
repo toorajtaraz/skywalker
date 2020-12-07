@@ -9,7 +9,7 @@ fn main() {
         Ok(args) => {
             match args.mode {
                 handle_arg::Modes::PortSniff => {
-                    port_sniffer::run(args.threads.unwrap(), args.ipaddr.unwrap(), args.timeout.unwrap(), args.verbose.unwrap())
+                    port_sniffer::run(args.threads.unwrap(), args.ipaddr.unwrap(), args.timeout.unwrap(), args.verbose.unwrap(), args.famous.unwrap())
                 },
                 handle_arg::Modes::Capture => {
                     packet_sniffer::listen(args.index.unwrap(), args.verbose.unwrap())

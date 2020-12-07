@@ -32,6 +32,7 @@ pub struct Arguments {
     pub timeout: Option<u32>,
     pub verbose: Option<u8>,
     pub index: Option<u16>,
+    pub famous: Option<bool>,
     pub mode: Modes, 
 }
 
@@ -80,6 +81,11 @@ pub fn get_args() -> Result<Arguments, String> {
                                .long("verbose")
                                .multiple(true)
                                .help("Sets the level of verbosity, it means whether or not to print timedout ports. Level 1 (-v) will print number of timedout ports and level 2 and above (-vv..) will print every one of them. In capturing verbosity will provide more and more information/errors."))
+                          .arg(Arg::with_name("famous")
+                               .short("f")
+                               .long("famous")
+                               .requires("IP")
+                               .help("Sets the level of verbosity, it means whether or not to print timedout ports. Level 1 (-v) will print number of timedout ports and level 2 and above (-vv..) will print every one of them. In capturing verbosity will provide more and more information/errors."))
                           .get_matches();
 
     let mut err = String::new();
@@ -102,9 +108,9 @@ pub fn get_args() -> Result<Arguments, String> {
             },
             _ => 0
         };
-        return Ok(Arguments{threads: None, timeout: None, verbose: Some(verbosity), ipaddr: None, mode: Modes::Capture, index: Some(index)});
+        return Ok(Arguments{threads: None, timeout: None, verbose: Some(verbosity), ipaddr: None, mode: Modes::Capture, index: Some(index), famous: None});
     } else if ip.contains("was") && index.contains("was") && matches.is_present("listDev") {
-        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::PrintDevices, index: None});
+        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::PrintDevices, index: None, famous: None});
     } else if ip.contains("was") {
         err.push_str("no parameters were provided.");
         return Err(err);
@@ -149,5 +155,5 @@ pub fn get_args() -> Result<Arguments, String> {
         } 
     };
 
-    Ok(Arguments{threads: Some(threads), timeout: Some(timeout), verbose: Some(verbosity), ipaddr: Some(ip), mode: Modes::PortSniff, index: None})
+    Ok(Arguments{threads: Some(threads), timeout: Some(timeout), verbose: Some(verbosity), ipaddr: Some(ip), mode: Modes::PortSniff, index: None, famous: Some(matches.is_present("famous"))})
 }

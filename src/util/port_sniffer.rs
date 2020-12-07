@@ -4,12 +4,13 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use ansi_term::Color;
 
-const MAX: u16 = 65535;
+const MAX: u16 = 65353;
+const FAMOUS: u16 = 1024;
 
-fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32, verbosity: u8) {
+fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32, verbosity: u8, famous: bool) {
     let port: u16 = id * steps;
     for i in 1..=steps {
-        if  port > MAX{         
+        if port > MAX || (famous && port > FAMOUS){         
             break;
         }
         let sa = SocketAddr::new(addr, port + i); 
@@ -41,13 +42,13 @@ fn scan(tx: Sender<String>, id: u16, steps:u16, addr: IpAddr, timeout: u32, verb
     }
 }
 
-pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8) {
+pub fn run(threads: u16, address: IpAddr, timeout: u32, verbose: u8, famous: bool) {
     let (tx, rx) = channel();
-    let number_of_slots = ((MAX / threads) as f64).ceil() as u16;
+    let number_of_slots = if famous {((FAMOUS / threads) as f64).ceil() as u16} else {((MAX / threads) as f64).ceil() as u16};
     for i in 0..threads{
         let tx = tx.clone();
         thread::spawn(move || {
-            scan(tx, i , number_of_slots, address, timeout, verbose);
+            scan(tx, i , number_of_slots, address, timeout, verbose, famous);
         });
     }
     let mut out = vec![];
