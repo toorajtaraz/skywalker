@@ -50,6 +50,7 @@ USAGE:
     skywalker [FLAGS] [OPTIONS] [IP]
 
 FLAGS:
+    -f, --famous     Flag for forcing famous port scan, 0 to 1023.
     -h, --help       Prints help information
     -l, --list       It will print out all interface devices and their $index.
     -V, --version    Prints version information

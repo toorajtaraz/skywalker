@@ -85,7 +85,7 @@ pub fn get_args() -> Result<Arguments, String> {
                                .short("f")
                                .long("famous")
                                .requires("IP")
-                               .help("Sets the level of verbosity, it means whether or not to print timedout ports. Level 1 (-v) will print number of timedout ports and level 2 and above (-vv..) will print every one of them. In capturing verbosity will provide more and more information/errors."))
+                               .help("Flag for forcing famous port scan, 0 to 1023."))
                           .get_matches();
 
     let mut err = String::new();
