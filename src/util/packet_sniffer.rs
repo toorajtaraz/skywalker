@@ -84,14 +84,14 @@ pub fn listen(index: u16, verbosity: u8) {
     let mut count = 1;
     for dev in devices {
        if index != 0 && count == index {
-            if !(dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any")) {
+            if !(dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any") || dev.name.contains("en")) {
                 capture(dev, verbosity, false);
                 return;
             }
             capture(dev, verbosity, true);
             return;
        } else if index == 0 {
-           if dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any") {
+           if dev.name.contains("wl") || dev.name.contains("eth") || dev.name.contains("ppp") || dev.name.contains("any") || dev.name.contains("en") {
                 capture(dev, verbosity, true);
                 return; 
            }

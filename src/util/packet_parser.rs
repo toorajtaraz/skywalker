@@ -178,6 +178,8 @@ impl Packet {
                        println!("\t\tTCP: {}", Color::Red.paint("{"));
                        println!("\t\t\tsource PORT: {}", data.source_port);
                        println!("\t\t\tdestination PORT: {}", data.dest_port);
+                       println!("\t\t\tack NO: {}", data.ack_no);
+                       println!("\t\t\twindow size: {}", data.window);
                        println!("\t\t{}", Color::Red.paint("}"));
                    },
                    Header::Udp(data) => {
@@ -198,7 +200,11 @@ impl Packet {
        if verbosity > 1 {
            println!("\t{}", Color::Red.paint("ERRORS: {"));
            for err in self.errors.iter() {
-               println!("\t\t{}", Color::Cyan.bold().paint(format!("{}", err).as_str()));
+               if err.len() > 40 {
+                    println!("\t\t{}", Color::Cyan.bold().paint("ERROR TOO LONG..."));
+                    continue;
+               }
+               println!("\t\t{}", Color::Cyan.bold().paint(format!("{}", err.to_string()).as_str()));
            }
            println!("\t{}", Color::Red.paint("}"));
        }
@@ -282,7 +288,8 @@ fn parse_ipv4(data: &[u8], packet: &mut Packet) -> Result<(), String> {
         },
         Err(e) => {
             packet.pe.push(data.to_owned());
-            return Err(format!("ERROR {:?}", e));
+            packet.errors.push(e.to_string());
+            return Err(format!("ERROR {}", e.to_string()));
         }
     }
     Ok(())
@@ -298,7 +305,8 @@ fn parse_ipv6(data: &[u8], packet: &mut Packet) -> Result<(), String> {
         },
         Err(e) => {
             packet.pe.push(data.to_owned());
-            return Err(format!("ERROR {:?}", e));
+            packet.errors.push(e.to_string());
+            return Err(format!("ERROR {}", e.to_string()));
         }
     }
 
@@ -311,7 +319,8 @@ fn parse_arp(data: &[u8], packet: &mut Packet) -> Result<(), String> {
         },
         Err(e) => {
             packet.pe.push(data.to_owned());
-            return Err(format!("ERROR {:?}", e));
+            packet.errors.push(e.to_string());
+            return Err(format!("ERROR {}", e.to_string()));
         }
     }
     Ok(())
@@ -322,19 +331,19 @@ fn parse_transport_layer(protocol: &ip::IPProtocol, data: &[u8], packet: &mut Pa
        ip::IPProtocol::TCP => {
             match parse_tcp(data, packet) {
                 Ok(_) => (),
-                Err(e) => return Err(e)
+                Err(e) => return Err(e.to_string())
             }
        },
        ip::IPProtocol::UDP => {
             match parse_udp(data, packet) {
                 Ok(_) => (),
-                Err(e) => return Err(e)
+                Err(e) => return Err(e.to_string())
             }
        },
        ip::IPProtocol::Other(code) => {
             packet.pe.push(data.to_owned());
             return Err(format!("UNKNOWN TRANSPORT LAYER PROTOCOL CODE: {:?}", code));
-       }
+       },
        _ => {
             packet.pe.push(data.to_owned());
             packet.not_supported_protocol = Some(format!("{:?}", protocol));
@@ -355,7 +364,8 @@ fn parse_tcp(data: &[u8], packet: &mut Packet) -> Result<(), String> {
         },
         Err(e) => {
             packet.pe.push(data.to_owned());
-            return Err(format!("ERROR {:?}", e));
+            packet.errors.push(e.to_string());
+            return Err(format!("ERROR {}", e.to_string()));
         }
     }
     Ok(())
@@ -368,12 +378,13 @@ fn parse_udp(data: &[u8], packet: &mut Packet) -> Result<(), String> {
                 Ok(_) => {
                     packet.header.push(Header::Udp(headers));
                 },
-                Err(e) => return Err(e)
+                Err(e) => return Err(e.to_string())
             }
         },
         Err(e) => {
             packet.pe.push(data.to_owned());
-            return Err(format!("ERROR {:?}", e));
+            packet.errors.push(e.to_string());
+            return Err(format!("ERROR {}", e.to_string()));
         }
     }
     Ok(())
@@ -411,7 +422,8 @@ fn parse_tls(data: &[u8], packet: &mut Packet) -> Result<(), String> {
                 }
                 Err(e) => {
                     packet.pe.push(data.to_owned());
-                    return Err(format!("ERROR {:?}", e));
+                    packet.errors.push(e.to_string());
+                    return Err(format!("ERROR {}", e.to_string()));
                 }
             }
         }
@@ -434,7 +446,8 @@ fn parse_dns(data: &[u8], packet: &mut Packet) -> Result<(), String> {
         },
         Err(e) => {
             packet.pe.push(data.to_owned());
-            return Err(format!("ERROR {:?}", e));
+            packet.errors.push(e.to_string());
+            return Err(format!("ERROR {}", e.to_string()));
         }
     }
     Ok(())
