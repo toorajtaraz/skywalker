@@ -3,7 +3,7 @@ use util::port_sniffer;
 use util::handle_arg;
 use util::packet_sniffer;
 use util::packet_parser;
-use util::handle_icmp;
+use util::handle_icmp_ping;
 
 fn main() {
    match handle_arg::get_args() {
