@@ -4,8 +4,9 @@ use util::handle_arg;
 use util::packet_sniffer;
 use util::packet_parser;
 use util::handle_icmp_ping;
-
+use util::handle_icmp_traceroute;
 fn main() {
+   handle_icmp_traceroute::test();
    match handle_arg::get_args() {
         Ok(args) => {
             match args.mode {
@@ -19,7 +20,7 @@ fn main() {
                     packet_sniffer::print_devices()
                 },
                 handle_arg::Modes::Ping => {
-                    handle_icmp::ping_hosts(args.hosts.unwrap());
+                    handle_icmp_ping::ping_hosts(args.hosts.unwrap());
                 }
             }
         },

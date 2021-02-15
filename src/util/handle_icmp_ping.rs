@@ -204,7 +204,6 @@ impl Ping {
 
 fn send_echo(tx: &mut TransportSender, addr: IpAddr, size: usize) -> Result<usize, std::io::Error> {
     let mut vec: Vec<u8> = vec![0; size];
-
     let mut echo_packet = echo_request::MutableEchoRequestPacket::new(&mut vec[..]).unwrap();
     echo_packet.set_sequence_number(random::<u16>());
     echo_packet.set_identifier(random::<u16>());
