@@ -346,7 +346,6 @@ pub fn ping_hosts(hosts: Vec<IpAddr>) {
         Err(e) => panic!("Error creating ping util: {}", e),
     };
     let run = Arc::new(Mutex::new(true));
-    let temp_local_run = run.clone();
     let temp_run = ping.run.clone();
     ctrlc::set_handler(move||{
         stdout().flush().unwrap();
