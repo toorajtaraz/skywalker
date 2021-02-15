@@ -3,6 +3,7 @@ use util::port_sniffer;
 use util::handle_arg;
 use util::packet_sniffer;
 use util::packet_parser;
+use util::handle_icmp;
 
 fn main() {
    match handle_arg::get_args() {
@@ -16,6 +17,9 @@ fn main() {
                 },
                 handle_arg::Modes::PrintDevices => {
                     packet_sniffer::print_devices()
+                },
+                handle_arg::Modes::Ping => {
+                    handle_icmp::ping_hosts(args.hosts.unwrap());
                 }
             }
         },
