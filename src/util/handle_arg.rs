@@ -17,13 +17,17 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::fmt;
 extern crate ansi_term;
+use ansi_term::Colour::RGB;
+
 extern crate num_cpus;
 use num_cpus::get;
+use std::net::ToSocketAddrs;
 
 pub enum Modes {
     PrintDevices,
     Capture,
-    PortSniff
+    PortSniff,
+    Ping
 }
 
 pub struct Arguments {
@@ -33,6 +37,7 @@ pub struct Arguments {
     pub verbose: Option<u8>,
     pub index: Option<u16>,
     pub famous: Option<bool>,
+    pub hosts: Option<Vec<IpAddr>>,
     pub mode: Modes, 
 }
 
@@ -86,9 +91,45 @@ pub fn get_args() -> Result<Arguments, String> {
                                .long("famous")
                                .requires("IP")
                                .help("Flag for forcing famous port scan, 0 to 1023."))
+                          .arg(Arg::with_name("ping")
+                               .short("p")
+                               .long("ping")
+                               .value_name("host list")
+                               .help("Sets hosts for executing ping, it should be within parentheses and seprated by one space like: \"8.8.8.8 google.com apple.com\"")
+                               .takes_value(true))
                           .get_matches();
 
     let mut err = String::new();
+    let hosts = matches.value_of("ping").unwrap_or("was not provided");
+    let mut host_list: Vec<IpAddr> = Vec::new();
+    if !hosts.contains("was not provided") {
+        for host in hosts.split(" ") {
+            if host.len() == 0 {
+                continue;
+            }
+            match host.parse::<IpAddr>() {
+                Ok(ip) => {
+                    println!("IP<{}> added for being pinged...", RGB(223, 97, 0).paint(format!("{}", ip)));
+                    host_list.push(ip);
+                    continue;
+                }
+                Err(_) => {}
+            }
+            match (&(format!("{}:0", host))[..]).to_socket_addrs() {
+                Ok(sockaddrs) => {
+                    for sa in sockaddrs {
+                        println!("Host<{}><{}> added for being pinged...", RGB(102, 255, 255).paint(format!("{:?}", host)), RGB(223, 97, 0).paint(format!("{}", sa.ip())));
+                        host_list.push(sa.ip());
+                    }
+                    continue;
+                }
+                Err(_) => {
+                    println!("Bad input ignoring {}", host);
+                }
+            }; 
+        }
+        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::Ping, index: None, famous: None, hosts: Some(host_list)});
+    }
     let cpu = format!("{}", get());
     let cpu = cpu.as_str();
     let threads = matches.value_of("threads").unwrap_or(cpu);
@@ -108,9 +149,9 @@ pub fn get_args() -> Result<Arguments, String> {
             },
             _ => 0
         };
-        return Ok(Arguments{threads: None, timeout: None, verbose: Some(verbosity), ipaddr: None, mode: Modes::Capture, index: Some(index), famous: None});
+        return Ok(Arguments{threads: None, timeout: None, verbose: Some(verbosity), ipaddr: None, mode: Modes::Capture, index: Some(index), famous: None, hosts: None});
     } else if ip.contains("was") && index.contains("was") && matches.is_present("listDev") {
-        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::PrintDevices, index: None, famous: None});
+        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::PrintDevices, index: None, famous: None, hosts: None});
     } else if ip.contains("was") {
         err.push_str("no parameters were provided.");
         return Err(err);
@@ -155,5 +196,5 @@ pub fn get_args() -> Result<Arguments, String> {
         } 
     };
 
-    Ok(Arguments{threads: Some(threads), timeout: Some(timeout), verbose: Some(verbosity), ipaddr: Some(ip), mode: Modes::PortSniff, index: None, famous: Some(matches.is_present("famous"))})
+    Ok(Arguments{threads: Some(threads), timeout: Some(timeout), verbose: Some(verbosity), ipaddr: Some(ip), mode: Modes::PortSniff, index: None, famous: Some(matches.is_present("famous")), hosts: None})
 }
