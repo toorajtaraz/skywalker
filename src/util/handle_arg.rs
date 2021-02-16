@@ -27,7 +27,8 @@ pub enum Modes {
     PrintDevices,
     Capture,
     PortSniff,
-    Ping
+    Ping,
+    TraceRoute,
 }
 
 pub struct Arguments {
@@ -38,7 +39,14 @@ pub struct Arguments {
     pub index: Option<u16>,
     pub famous: Option<bool>,
     pub hosts: Option<Vec<IpAddr>>,
-    pub mode: Modes, 
+    pub mode: Modes,
+    pub host: Option<IpAddr>,
+    pub max_ttl: Option<u8>,
+    pub start_ttl: Option<u8>,
+    pub max_tries: Option<u16>,
+    pub port: Option<u16>,
+    pub size: Option<usize>,
+    pub protocol: Option<bool>,
 }
 
 impl fmt::Display for Arguments {
@@ -64,7 +72,7 @@ pub fn get_args() -> Result<Arguments, String> {
                                .short("t")
                                .long("timeout")
                                .value_name("num")
-                               .help("Sets timeout in nanoseconds, default value is 1^e9 or 1 second")
+                               .help("Sets timeout in nanoseconds, default value is 1^e9 or 1 second.")
                                .requires("IP")
                                .takes_value(true))
                           .arg(Arg::with_name("listDev")
@@ -97,10 +105,180 @@ pub fn get_args() -> Result<Arguments, String> {
                                .value_name("host list")
                                .help("Sets hosts for executing ping, it should be within parentheses and seprated by one space like: \"8.8.8.8 google.com apple.com\"")
                                .takes_value(true))
+                          .arg(Arg::with_name("trace")
+                               .short("r")
+                               .long("traceroute")
+                               .value_name("host or ip")
+                               .help("Route trace provided host or ip.")
+                               .takes_value(true))
+                          .arg(Arg::with_name("max_ttl")
+                               .long("max_ttl")
+                               .value_name("MAX TTL")
+                               .help("Sets maximum number of HOPs.")
+                               .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("start_ttl")
+                               .long("start_ttl")
+                               .value_name("MIN TTL")
+                               .help("Sets TTL to begin with.")
+                               .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("max_tries")
+                               .long("max_tries")
+                               .value_name("MAX TRIES")
+                               .help("Sets number of times we resend packet and wait for ICMP reply.")
+                               .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("port")
+                               .long("port")
+                               .value_name("PORT")
+                               .help("Sets starting port for tracing.")
+                               .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("size")
+                               .long("size")
+                               .value_name("SIZE")
+                               .help("Sets size of packets sent for tracing.")
+                               .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("protocol")
+                               .long("protocol")
+                               .value_name("PROTOCOL")
+                               .help("Sets protocol used for tracing, Expected values: \"UDP, ICMP\"")
+                               .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("timeout_trace")
+                               .long("timeout_trace")
+                               .value_name("TIMEOUT")
+                               .help("Sets timeout in microseconds, default is 200ms.")
+                               .requires("trace")
+                               .takes_value(true))
                           .get_matches();
 
     let mut err = String::new();
     let hosts = matches.value_of("ping").unwrap_or("was not provided");
+    let host = matches.value_of("trace").unwrap_or("was not provided");
+    if !host.contains("was not provided") {
+        let mut args =  Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::TraceRoute, index: None, famous: None, hosts: None, max_ttl: None, start_ttl: None, max_tries: None, port: None, size: None, host: None, protocol: None};
+        match matches.value_of("max_tries") {
+            Some(max_tries) => {
+                match max_tries.parse::<u16>() {
+                    Ok(max_tries) => {
+                        args.max_tries = Some(max_tries);
+                    }
+                    Err(_) => {
+                        err.push_str(format!("max_tries must be unsigned 16 bit integer.").as_str());
+                        return Err(err);
+                    }
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("max_ttl") {
+            Some(max_ttl) => {
+                match max_ttl.parse::<u8>() {
+                    Ok(max_ttl) => {
+                        args.max_ttl = Some(max_ttl);
+                    }
+                    Err(_) => {
+                        err.push_str(format!("max_ttl must be unsigned 8 bit integer.").as_str());
+                        return Err(err);
+                    }
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("start_ttl") {
+            Some(start_ttl) => {
+                match start_ttl.parse::<u8>() {
+                    Ok(start_ttl) => {
+                        args.start_ttl = Some(start_ttl);
+                    }
+                    Err(_) => {
+                        err.push_str(format!("start_ttl must be unsigned 8 bit integer.").as_str());
+                        return Err(err);
+                    }
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("port") {
+            Some(port) => {
+                match port.parse::<u16>() {
+                    Ok(port) => {
+                        args.port = Some(port);
+                    }
+                    Err(_) => {
+                        err.push_str(format!("port must be unsigned 16 bit integer.").as_str());
+                        return Err(err);
+                    }
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("size") {
+            Some(size) => {
+                match size.parse::<usize>() {
+                    Ok(size) => {
+                        args.size = Some(size);
+                    }
+                    Err(_) => {
+                        err.push_str(format!("size be unsigned integer.").as_str());
+                        return Err(err);
+                    }
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("protocol") {
+            Some(protocol) => {
+                if protocol.contains("UDP") {
+                    args.protocol = Some(true);
+                } else if protocol.contains("ICMP") {
+                    args.protocol = Some(false);
+                } else {
+                    err.push_str(format!("protocol must be either UDP or ICMP.").as_str());
+                    return Err(err);
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("timeout_trace") {
+            Some(timeout) => {
+                match timeout.parse::<u32>() {
+                    Ok(timeout) => {
+                        args.timeout = Some(timeout);
+                    }
+                    Err(_) => {
+                        err.push_str(format!("timeout must be unsigned integer.").as_str());
+                        return Err(err);
+                    }
+                }
+            }
+            _ => {}
+        }
+        match matches.value_of("trace").unwrap().parse::<IpAddr>() {
+            Ok(ip) => {
+                args.host = Some(ip);
+                return Ok(args);
+            }
+            Err(_) => {}
+        }
+        match (&(format!("{}:0", host))[..]).to_socket_addrs() {
+            Ok(sockaddrs) => {
+                for sa in sockaddrs {
+                    if sa.is_ipv4() {
+                        args.host = Some(sa.ip());
+                        return Ok(args);
+                    }
+                }
+            }
+            Err(_) => {
+                err.push_str(format!("Bad host.").as_str());
+                return Err(err);
+            }
+        }; 
+    }
     let mut host_list: Vec<IpAddr> = Vec::new();
     if !hosts.contains("was not provided") {
         for host in hosts.split(" ") {
@@ -128,7 +306,7 @@ pub fn get_args() -> Result<Arguments, String> {
                 }
             }; 
         }
-        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::Ping, index: None, famous: None, hosts: Some(host_list)});
+        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::Ping, index: None, famous: None, hosts: Some(host_list), max_ttl: None, start_ttl: None, max_tries: None, port: None, size: None, host: None, protocol: None});
     }
     let cpu = format!("{}", get());
     let cpu = cpu.as_str();
@@ -149,9 +327,9 @@ pub fn get_args() -> Result<Arguments, String> {
             },
             _ => 0
         };
-        return Ok(Arguments{threads: None, timeout: None, verbose: Some(verbosity), ipaddr: None, mode: Modes::Capture, index: Some(index), famous: None, hosts: None});
+        return Ok(Arguments{threads: None, timeout: None, verbose: Some(verbosity), ipaddr: None, mode: Modes::Capture, index: Some(index), famous: None, hosts: None, max_ttl: None, start_ttl: None, max_tries: None, port: None, size: None, host: None, protocol: None});
     } else if ip.contains("was") && index.contains("was") && matches.is_present("listDev") {
-        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::PrintDevices, index: None, famous: None, hosts: None});
+        return Ok(Arguments{threads: None, timeout: None, verbose: None, ipaddr: None, mode: Modes::PrintDevices, index: None, famous: None, hosts: None, max_ttl: None, start_ttl: None, max_tries: None, port: None, size: None, host: None, protocol: None});
     } else if ip.contains("was") {
         err.push_str("no parameters were provided.");
         return Err(err);
@@ -196,5 +374,5 @@ pub fn get_args() -> Result<Arguments, String> {
         } 
     };
 
-    Ok(Arguments{threads: Some(threads), timeout: Some(timeout), verbose: Some(verbosity), ipaddr: Some(ip), mode: Modes::PortSniff, index: None, famous: Some(matches.is_present("famous")), hosts: None})
+    Ok(Arguments{threads: Some(threads), timeout: Some(timeout), verbose: Some(verbosity), ipaddr: Some(ip), mode: Modes::PortSniff, index: None, famous: Some(matches.is_present("famous")), hosts: None, max_ttl: None, start_ttl: None, max_tries: None, port: None, size: None, host: None, protocol: None})
 }

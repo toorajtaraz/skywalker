@@ -635,12 +635,16 @@ pub fn traceroute(
     max_ttl: Option<u8>,
     begin_ttl: Option<u8>,
     max_tries: Option<u16>,
-    timeout: Option<u64>,
+    timeout: Option<u32>,
     port: Option<u16>,
     size: Option<usize>,
     addr: IpAddr,
     is_udp: Option<bool>,
 ) {
+    let timeout = match timeout {
+        None => None,
+        Some(n) => Some(n as u64),
+    };
     let protocol = match is_udp {
         Some(p) => {
             if p {
