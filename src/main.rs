@@ -6,7 +6,7 @@ use util::packet_parser;
 use util::handle_icmp_ping;
 use util::handle_icmp_traceroute;
 fn main() {
-   handle_icmp_traceroute::test();
+   handle_icmp_traceroute::start_trace_route();
    match handle_arg::get_args() {
         Ok(args) => {
             match args.mode {
