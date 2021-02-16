@@ -6,7 +6,7 @@ use util::packet_parser;
 use util::handle_icmp_ping;
 use util::handle_icmp_traceroute;
 fn main() {
-   handle_icmp_traceroute::traceroute(None, None, None, None, None, None, None, std::net::IpAddr::from([8, 8, 8, 8]), None);
+   handle_icmp_traceroute::traceroute(None, None, None, None, None, None, std::net::IpAddr::from([8, 8, 8, 8]), None);
    match handle_arg::get_args() {
         Ok(args) => {
             match args.mode {

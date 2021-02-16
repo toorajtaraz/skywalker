@@ -4,27 +4,24 @@ use pnet::packet::icmp::echo_request;
 use pnet::packet::icmp::IcmpTypes;
 use pnet::packet::icmpv6::{Icmpv6Types, MutableIcmpv6Packet};
 use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::ipv4::MutableIpv4Packet;
-use pnet::packet::ipv6::MutableIpv6Packet;
 use pnet::packet::Packet;
 use pnet::packet::{icmp, icmpv6, ipv4, ipv6, udp};
 use pnet::transport::transport_channel;
 use pnet::transport::TransportChannelType::{Layer3, Layer4};
-use pnet::transport::TransportProtocol::{Ipv4, Ipv6};
+use pnet::transport::TransportProtocol::Ipv4;
+use pnet::transport::TransportSender;
 use pnet::transport::{icmp_packet_iter, icmpv6_packet_iter};
-use pnet::transport::{TransportReceiver, TransportSender};
 use pnet::util;
 use pnet_macros_support::types::*;
 use rand::random;
+use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 extern crate ansi_term;
 extern crate ctrlc;
 use ansi_term::Colour::RGB;
-use std::io::{stdout, Write};
 
 #[derive(Copy, Clone)]
 enum TraceRouteProtocol {
@@ -37,6 +34,7 @@ struct HopFound {
     tries: u16,
     hop_count: u8,
     is_last: bool,
+    time: Option<Duration>,
 }
 
 type TraceRouteRes = Result<(TraceRoute, Receiver<HopFound>), String>;
@@ -50,15 +48,11 @@ struct TraceRoute {
     timeout: u64,
     size: usize,
     results_sender: Sender<HopFound>,
-    tx: Arc<Sender<HopFound>>,
-    rx: Receiver<HopFound>,
-    timer: Instant,
     protocol: TraceRouteProtocol,
 }
 
 impl TraceRoute {
     fn new(
-        max_rtt: Option<u16>,
         max_ttl: Option<u8>,
         begin_ttl: Option<u8>,
         max_tries: Option<u16>,
@@ -70,20 +64,15 @@ impl TraceRoute {
     ) -> TraceRouteRes {
         let (send_handle, recieve_handle) = channel();
 
-        let (tx, rx) = channel();
-
         let mut trace_route = TraceRoute {
-            max_ttl: 128,
+            max_ttl: 30,
             begin_ttl: 1,
-            max_tries: 16,
+            max_tries: 4,
             port: 33434,
-            timeout: 2000,
+            timeout: 200,
             address: addr,
             size: 64,
             results_sender: send_handle,
-            rx,
-            tx: Arc::new(tx),
-            timer: Instant::now(),
             protocol: TraceRouteProtocol::Udp,
         };
 
@@ -153,6 +142,7 @@ fn build_udp_send_v4(
     size: usize,
     port: u16,
     ttl: u8,
+    my_ip: Ipv4Addr,
 ) -> Result<usize, std::io::Error> {
     let mut vec: Vec<u8> = vec![0; size];
     let mut udp_packet = udp::MutableUdpPacket::new(&mut vec[..]).unwrap();
@@ -180,7 +170,7 @@ fn build_udp_send_v4(
     ipv4_packet.set_ttl(ttl);
     ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Udp);
     let ip = addr.to_string().parse::<Ipv4Addr>().unwrap();
-    ipv4_packet.set_source(Ipv4Addr::from([192, 168, 1, 135]));
+    ipv4_packet.set_source(my_ip);
     ipv4_packet.set_destination(ip);
     ipv4_packet
         .set_total_length((ipv4::MutableIpv4Packet::minimum_packet_size() + vec.len()) as u16);
@@ -197,6 +187,7 @@ fn build_udp_send_v6(
     size: usize,
     port: u16,
     ttl: u8,
+    my_ip: Ipv6Addr,
 ) -> Result<usize, std::io::Error> {
     let mut vec: Vec<u8> = vec![0; size];
     let mut udp_packet = udp::MutableUdpPacket::new(&mut vec[..]).unwrap();
@@ -221,13 +212,7 @@ fn build_udp_send_v6(
     ipv6_packet.set_hop_limit(ttl);
     ipv6_packet.set_next_header(IpNextHeaderProtocols::Udp);
     let ip = addr.to_string().parse::<Ipv6Addr>().unwrap();
-    ipv6_packet.set_source(
-        get_ip_addr(false)
-            .unwrap()
-            .to_string()
-            .parse::<Ipv6Addr>()
-            .unwrap(),
-    );
+    ipv6_packet.set_source(my_ip);
     ipv6_packet.set_destination(ip);
     ipv6_packet.set_payload_length((vec.len()) as u16);
     ipv6_packet.set_payload(&mut vec[..]);
@@ -239,8 +224,8 @@ fn build_icmp_send_v4(
     tx: &mut TransportSender,
     addr: IpAddr,
     size: usize,
-    port: u16,
     ttl: u8,
+    my_ip: Ipv4Addr,
 ) -> Result<usize, std::io::Error> {
     let mut vec: Vec<u8> = vec![0; size];
     let mut echo_packet = echo_request::MutableEchoRequestPacket::new(&mut vec[..]).unwrap();
@@ -260,7 +245,7 @@ fn build_icmp_send_v4(
     ipv4_packet.set_ttl(ttl);
     ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Icmp);
     let ip = addr.to_string().parse::<Ipv4Addr>().unwrap();
-    ipv4_packet.set_source(Ipv4Addr::from([192, 168, 1, 135]));
+    ipv4_packet.set_source(my_ip);
     ipv4_packet.set_destination(ip);
     ipv4_packet
         .set_total_length((ipv4::MutableIpv4Packet::minimum_packet_size() + vec.len()) as u16);
@@ -276,8 +261,8 @@ fn build_icmp_send_v6(
     tx: &mut TransportSender,
     addr: IpAddr,
     size: usize,
-    port: u16,
     ttl: u8,
+    my_ip: Ipv6Addr,
 ) -> Result<usize, std::io::Error> {
     let mut vec: Vec<u8> = vec![0; size];
 
@@ -293,13 +278,7 @@ fn build_icmp_send_v6(
     ipv6_packet.set_hop_limit(ttl);
     ipv6_packet.set_next_header(IpNextHeaderProtocols::Icmpv6);
     let ip = addr.to_string().parse::<Ipv6Addr>().unwrap();
-    ipv6_packet.set_source(
-        get_ip_addr(false)
-            .unwrap()
-            .to_string()
-            .parse::<Ipv6Addr>()
-            .unwrap(),
-    );
+    ipv6_packet.set_source(my_ip);
     ipv6_packet.set_destination(ip);
     ipv6_packet.set_payload_length((vec.len()) as u16);
     ipv6_packet.set_payload(&mut vec[..]);
@@ -340,19 +319,20 @@ fn start_trace_route_on_v4(
             panic!("No <UP> interface was found, please connect to internet.");
         }
     };
+    let mut seen: BTreeSet<IpAddr> = BTreeSet::new();
     let protocol = Layer4(Ipv4(IpNextHeaderProtocols::Icmp));
-    let (transport_tx, transport_rx) = match transport_channel(4096, protocol) {
+    let (_, transport_rx) = match transport_channel(4096, protocol) {
         Ok((tx, rx)) => (tx, rx),
-        Err(e) => return,
+        Err(_) => return,
     };
-    let handle = thread::spawn(move || {
+    thread::spawn(move || {
         let ipv4_protocol = match trace_route_protocol {
             TraceRouteProtocol::Udp => Layer3(IpNextHeaderProtocols::Udp),
             TraceRouteProtocol::Icmp => Layer3(IpNextHeaderProtocols::Icmp),
         };
-        let (mut ipv4_tx, ipv4_rx) = match transport_channel(4096, ipv4_protocol) {
+        let (mut ipv4_tx, _) = match transport_channel(4096, ipv4_protocol) {
             Ok((tx, rx)) => (tx, rx),
-            Err(e) => return,
+            Err(_) => return,
         };
 
         let mut receiver = transport_rx;
@@ -360,22 +340,38 @@ fn start_trace_route_on_v4(
         let mut i: u8 = begin_ttl;
         let mut tries: u16 = 0;
         let mut has_changed = false;
+        let mut timer;
         loop {
             if i > end_ttl {
+                tx.send(HopFound {
+                    addr: None,
+                    hop_count: i,
+                    tries,
+                    is_last: true,
+                    time: None,
+                })
+                .unwrap();
                 break;
             }
             match trace_route_protocol {
                 TraceRouteProtocol::Udp => {
-                    match build_udp_send_v4(&mut ipv4_tx, ip, packet_size, port + i as u16, i) {
-                        Ok(_) => {}
+                    match build_udp_send_v4(
+                        &mut ipv4_tx,
+                        ip,
+                        packet_size,
+                        port + i as u16,
+                        i,
+                        self_ip,
+                    ) {
+                        Ok(_) => timer = Instant::now(),
                         Err(e) => {
                             panic!("Could not send packet, make sure this program has needed privilages, Error<{}>", e.to_string());
                         }
                     }
                 }
                 TraceRouteProtocol::Icmp => {
-                    match build_icmp_send_v4(&mut ipv4_tx, ip, 64, port, i) {
-                        Ok(_) => {}
+                    match build_icmp_send_v4(&mut ipv4_tx, ip, 64, i, self_ip) {
+                        Ok(_) => timer = Instant::now(),
                         Err(e) => {
                             panic!("Could not send packet, make sure this program has needed privilages, Error<{}>", e.to_string());
                         }
@@ -384,57 +380,66 @@ fn start_trace_route_on_v4(
             };
             match iter.next_with_timeout(Duration::from_millis(timeout)) {
                 Ok(p) => match p {
-                    Some((packet, addr)) => {
-                        if packet.get_icmp_type() == icmp::IcmpType::new(11) {
-                            tx.send(HopFound {
-                                addr: Some(addr),
-                                hop_count: i,
-                                tries,
-                                is_last: false,
-                            })
-                            .unwrap();
-                            has_changed = true;
-                            i += 1;
-                            tries = 0;
-                        } else {
-                            match trace_route_protocol {
-                                TraceRouteProtocol::Udp => {
-                                    if packet.get_icmp_type() == icmp::IcmpType::new(3) {
-                                        tx.send(HopFound {
-                                            addr: Some(addr),
-                                            hop_count: i,
-                                            tries,
-                                            is_last: true,
-                                        })
-                                        .unwrap();
-                                        break;
-                                    } else {
-                                        println!(
-                                            "UNEXPECTED ICMP PACKET WITH <{:?}>",
-                                            packet.get_icmp_type()
-                                        );
+                    Some((packet, addr)) => match seen.get(&addr) {
+                        None => {
+                            seen.insert(addr);
+                            if packet.get_icmp_type() == icmp::IcmpType::new(11) {
+                                tx.send(HopFound {
+                                    addr: Some(addr),
+                                    hop_count: i,
+                                    tries,
+                                    is_last: false,
+                                    time: Some(Instant::now() - timer),
+                                })
+                                .unwrap();
+                                has_changed = true;
+                                i += 1;
+                                tries = 0;
+                            } else {
+                                match trace_route_protocol {
+                                    TraceRouteProtocol::Udp => {
+                                        if packet.get_icmp_type() == icmp::IcmpType::new(3) {
+                                            tx.send(HopFound {
+                                                addr: Some(addr),
+                                                hop_count: i,
+                                                tries,
+                                                is_last: true,
+                                                time: Some(Instant::now() - timer),
+                                            })
+                                            .unwrap();
+                                            break;
+                                        } else {
+                                            println!(
+                                                "UNEXPECTED ICMP PACKET WITH <{:?}>",
+                                                packet.get_icmp_type()
+                                            );
+                                        }
                                     }
-                                }
-                                TraceRouteProtocol::Icmp => {
-                                    if packet.get_icmp_type() == icmp::IcmpType::new(0) {
-                                        tx.send(HopFound {
-                                            addr: Some(addr),
-                                            hop_count: i,
-                                            tries,
-                                            is_last: true,
-                                        })
-                                        .unwrap();
-                                        break;
-                                    } else {
-                                        println!(
-                                            "UNEXPECTED ICMP PACKET WITH <{:?}>",
-                                            packet.get_icmp_type()
-                                        );
+                                    TraceRouteProtocol::Icmp => {
+                                        if packet.get_icmp_type() == icmp::IcmpType::new(0) {
+                                            tx.send(HopFound {
+                                                addr: Some(addr),
+                                                hop_count: i,
+                                                tries,
+                                                is_last: true,
+                                                time: Some(Instant::now() - timer),
+                                            })
+                                            .unwrap();
+                                            break;
+                                        } else {
+                                            println!(
+                                                "UNEXPECTED ICMP PACKET WITH <{:?}>",
+                                                packet.get_icmp_type()
+                                            );
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
+                        _ => {
+                            tries -= 1;
+                        }
+                    },
                     _ => has_changed = false,
                 },
                 _ => has_changed = false,
@@ -446,6 +451,7 @@ fn start_trace_route_on_v4(
                     hop_count: i,
                     tries,
                     is_last: false,
+                    time: None,
                 })
                 .unwrap();
                 tries = 0;
@@ -473,19 +479,20 @@ fn start_trace_route_on_v6(
             panic!("No <UP> interface was found, please connect to internet.");
         }
     };
+    let mut seen: BTreeSet<IpAddr> = BTreeSet::new();
     let protocol = Layer4(Ipv4(IpNextHeaderProtocols::Icmpv6));
-    let (transport_tx, transport_rx) = match transport_channel(4096, protocol) {
+    let (_, transport_rx) = match transport_channel(4096, protocol) {
         Ok((tx, rx)) => (tx, rx),
-        Err(e) => return,
+        Err(_) => return,
     };
-    let handle = thread::spawn(move || {
+    thread::spawn(move || {
         let ipv6_protocol = match trace_route_protocol {
             TraceRouteProtocol::Udp => Layer3(IpNextHeaderProtocols::Udp),
             TraceRouteProtocol::Icmp => Layer3(IpNextHeaderProtocols::Icmpv6),
         };
-        let (mut ipv6_tx, ipv6_rx) = match transport_channel(4096, ipv6_protocol) {
+        let (mut ipv6_tx, _) = match transport_channel(4096, ipv6_protocol) {
             Ok((tx, rx)) => (tx, rx),
-            Err(e) => return,
+            Err(_) => return,
         };
 
         let mut receiver = transport_rx;
@@ -493,22 +500,38 @@ fn start_trace_route_on_v6(
         let mut i: u8 = begin_ttl;
         let mut tries: u16 = 0;
         let mut has_changed = false;
+        let mut timer;
         loop {
             if i > end_ttl {
+                tx.send(HopFound {
+                    addr: None,
+                    hop_count: i,
+                    tries,
+                    is_last: true,
+                    time: None,
+                })
+                .unwrap();
                 break;
             }
             match trace_route_protocol {
                 TraceRouteProtocol::Udp => {
-                    match build_udp_send_v6(&mut ipv6_tx, ip, packet_size, port + i as u16, i) {
-                        Ok(_) => {}
+                    match build_udp_send_v6(
+                        &mut ipv6_tx,
+                        ip,
+                        packet_size,
+                        port + i as u16,
+                        i,
+                        self_ip,
+                    ) {
+                        Ok(_) => timer = Instant::now(),
                         Err(e) => {
                             panic!("Could not send packet, make sure this program has needed privilages, Error<{}>", e.to_string());
                         }
                     }
                 }
                 TraceRouteProtocol::Icmp => {
-                    match build_icmp_send_v6(&mut ipv6_tx, ip, 64, port, i) {
-                        Ok(_) => {}
+                    match build_icmp_send_v6(&mut ipv6_tx, ip, 64, i, self_ip) {
+                        Ok(_) => timer = Instant::now(),
                         Err(e) => {
                             panic!("Could not send packet, make sure this program has needed privilages, Error<{}>", e.to_string());
                         }
@@ -517,57 +540,67 @@ fn start_trace_route_on_v6(
             };
             match iter.next_with_timeout(Duration::from_millis(timeout)) {
                 Ok(p) => match p {
-                    Some((packet, addr)) => {
-                        if packet.get_icmpv6_type() == icmpv6::Icmpv6Type::new(0) && addr != ip {
-                            tx.send(HopFound {
-                                addr: Some(addr),
-                                hop_count: i,
-                                tries,
-                                is_last: false,
-                            })
-                            .unwrap();
-                            has_changed = true;
-                            i += 1;
-                            tries = 0;
-                        } else {
-                            match trace_route_protocol {
-                                TraceRouteProtocol::Udp => {
-                                    if packet.get_icmpv6_type() == icmpv6::Icmpv6Type::new(4) {
-                                        tx.send(HopFound {
-                                            addr: Some(addr),
-                                            hop_count: i,
-                                            tries,
-                                            is_last: true,
-                                        })
-                                        .unwrap();
-                                        break;
-                                    } else {
-                                        println!(
-                                            "UNEXPECTED ICMP PACKET WITH <{:?}>",
-                                            packet.get_icmpv6_type()
-                                        );
+                    Some((packet, addr)) => match seen.get(&addr) {
+                        None => {
+                            seen.insert(addr);
+                            if packet.get_icmpv6_type() == icmpv6::Icmpv6Type::new(0) && addr != ip
+                            {
+                                tx.send(HopFound {
+                                    addr: Some(addr),
+                                    hop_count: i,
+                                    tries,
+                                    is_last: false,
+                                    time: Some(Instant::now() - timer),
+                                })
+                                .unwrap();
+                                has_changed = true;
+                                i += 1;
+                                tries = 0;
+                            } else {
+                                match trace_route_protocol {
+                                    TraceRouteProtocol::Udp => {
+                                        if packet.get_icmpv6_type() == icmpv6::Icmpv6Type::new(4) {
+                                            tx.send(HopFound {
+                                                addr: Some(addr),
+                                                hop_count: i,
+                                                tries,
+                                                is_last: true,
+                                                time: Some(Instant::now() - timer),
+                                            })
+                                            .unwrap();
+                                            break;
+                                        } else {
+                                            println!(
+                                                "UNEXPECTED ICMP PACKET WITH <{:?}>",
+                                                packet.get_icmpv6_type()
+                                            );
+                                        }
                                     }
-                                }
-                                TraceRouteProtocol::Icmp => {
-                                    if packet.get_icmpv6_type() == icmpv6::Icmpv6Type::new(0) {
-                                        tx.send(HopFound {
-                                            addr: Some(addr),
-                                            hop_count: i,
-                                            tries,
-                                            is_last: true,
-                                        })
-                                        .unwrap();
-                                        break;
-                                    } else {
-                                        println!(
-                                            "UNEXPECTED ICMP PACKET WITH <{:?}>",
-                                            packet.get_icmpv6_type()
-                                        );
+                                    TraceRouteProtocol::Icmp => {
+                                        if packet.get_icmpv6_type() == icmpv6::Icmpv6Type::new(0) {
+                                            tx.send(HopFound {
+                                                addr: Some(addr),
+                                                hop_count: i,
+                                                tries,
+                                                is_last: true,
+                                                time: Some(Instant::now() - timer),
+                                            })
+                                            .unwrap();
+                                            break;
+                                        } else {
+                                            println!(
+                                                "UNEXPECTED ICMP PACKET WITH <{:?}>",
+                                                packet.get_icmpv6_type()
+                                            );
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
+                        _ => {
+                            tries -= 1;
+                        }
+                    },
                     _ => has_changed = false,
                 },
                 _ => has_changed = false,
@@ -579,6 +612,7 @@ fn start_trace_route_on_v6(
                     hop_count: i,
                     tries,
                     is_last: false,
+                    time: None,
                 })
                 .unwrap();
                 tries = 0;
@@ -598,7 +632,6 @@ fn icmpv6_checksum(packet: &MutableIcmpv6Packet) -> u16be {
 }
 
 pub fn traceroute(
-    max_rtt: Option<u16>,
     max_ttl: Option<u8>,
     begin_ttl: Option<u8>,
     max_tries: Option<u16>,
@@ -616,29 +649,65 @@ pub fn traceroute(
                 Some(TraceRouteProtocol::Icmp)
             }
         }
-        None => None
+        None => None,
     };
 
     let (tracer, results) = TraceRoute::new(
-        max_rtt, max_ttl, begin_ttl, max_tries, timeout, port, size, addr, protocol,
-    ).unwrap();
+        max_ttl, begin_ttl, max_tries, timeout, port, size, addr, protocol,
+    )
+    .unwrap();
 
     tracer.run_trace_route();
     loop {
         match results.recv() {
             Ok(result) => {
                 if result.is_last {
-                    println!("HOP<{}> <==> DESTINATION<{}>", result.hop_count, result.addr.unwrap());
+                    match result.addr {
+                        None => {
+                            println!(
+                                "HOP<{}> <==> NO REPLY after {} tries\n{}",
+                                ansi_term::Color::Cyan.paint(format!("{}", result.hop_count)),
+                                ansi_term::Color::Yellow.paint(format!("{}", result.tries)),
+                                ansi_term::Color::Red
+                                    .paint(format!("**END BECAUSE OF REACHING MAX HOP**")),
+                            );
+                        }
+                        _ => {
+                            println!(
+                                "HOP<{}> <==> DESTINATION<{}> in {} after {} tries",
+                                ansi_term::Color::Cyan.paint(format!("{}", result.hop_count)),
+                                RGB(223, 97, 0).paint(format!("{}", result.addr.unwrap())),
+                                RGB(102, 255, 255).paint(format!("{:?}", result.time.unwrap())),
+                                ansi_term::Color::Yellow.paint(format!("{}", result.tries)),
+                            );
+                        }
+                    }
                     break;
                 } else if result.hop_count == 1 {
-                    println!("HOP<{}> <==> GATEWAY<{}>", result.hop_count, result.addr.unwrap());
+                    println!(
+                        "HOP<{}> <==> GATEWAY<{}> in {} after {} tries",
+                        ansi_term::Color::Cyan.paint(format!("{}", result.hop_count)),
+                        RGB(223, 97, 0).paint(format!("{}", result.addr.unwrap())),
+                        RGB(102, 255, 255).paint(format!("{:?}", result.time.unwrap())),
+                        ansi_term::Color::Yellow.paint(format!("{}", result.tries)),
+                    );
                 } else {
                     match result.addr {
                         Some(addr) => {
-                            println!("HOP<{}> <==> <{}>", result.hop_count, addr);
+                            println!(
+                                "HOP<{}> <==> <{}> in {} after {} tries",
+                                ansi_term::Color::Cyan.paint(format!("{}", result.hop_count)),
+                                RGB(223, 97, 0).paint(format!("{}", addr)),
+                                RGB(102, 255, 255).paint(format!("{:?}", result.time.unwrap())),
+                                ansi_term::Color::Yellow.paint(format!("{}", result.tries)),
+                            );
                         }
                         _ => {
-                            println!("HOP<{}> <==> NO REPLY", result.hop_count);
+                            println!(
+                                "HOP<{}> <==> NO REPLY after {} tries",
+                                ansi_term::Color::Cyan.paint(format!("{}", result.hop_count)),
+                                ansi_term::Color::Yellow.paint(format!("{}", result.tries)),
+                            );
                         }
                     }
                 }
