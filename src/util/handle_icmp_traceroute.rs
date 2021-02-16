@@ -17,6 +17,7 @@ use pnet::util;
 use pnet_macros_support::types::*;
 use rand::random;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -25,6 +26,7 @@ extern crate ctrlc;
 use ansi_term::Colour::RGB;
 use std::io::{stdout, Write};
 
+#[derive(Copy, Clone)]
 enum TraceRouteProtocol {
     Icmp,
     Udp,
@@ -48,7 +50,7 @@ struct TraceRoute {
     timeout: u64,
     size: usize,
     results_sender: Sender<HopFound>,
-    tx: Sender<HopFound>,
+    tx: Arc<Sender<HopFound>>,
     rx: Receiver<HopFound>,
     timer: Instant,
     protocol: TraceRouteProtocol,
@@ -64,7 +66,7 @@ impl TraceRoute {
         port: Option<u16>,
         size: Option<usize>,
         addr: IpAddr,
-        protocol: TraceRouteProtocol,
+        protocol: Option<TraceRouteProtocol>,
     ) -> TraceRouteRes {
         let (send_handle, recieve_handle) = channel();
 
@@ -80,7 +82,7 @@ impl TraceRoute {
             size: 64,
             results_sender: send_handle,
             rx,
-            tx,
+            tx: Arc::new(tx),
             timer: Instant::now(),
             protocol: TraceRouteProtocol::Udp,
         };
@@ -108,13 +110,18 @@ impl TraceRoute {
         if let Some(to) = timeout {
             trace_route.timeout = to;
         }
+
+        if let Some(p) = protocol {
+            trace_route.protocol = p;
+        }
+
         Ok((trace_route, recieve_handle))
     }
 
-    fn run_trace_route(&self) {
+    pub fn run_trace_route(&self) {
         if self.address.is_ipv4() {
             start_trace_route_on_v4(
-                self.results_sender,
+                self.results_sender.clone(),
                 self.begin_ttl,
                 self.max_ttl,
                 self.max_tries,
@@ -126,7 +133,7 @@ impl TraceRoute {
             );
         } else {
             start_trace_route_on_v6(
-                self.results_sender,
+                self.results_sender.clone(),
                 self.begin_ttl,
                 self.max_ttl,
                 self.max_tries,
@@ -400,6 +407,7 @@ fn start_trace_route_on_v4(
                                             is_last: true,
                                         })
                                         .unwrap();
+                                        break;
                                     } else {
                                         println!(
                                             "UNEXPECTED ICMP PACKET WITH <{:?}>",
@@ -416,6 +424,7 @@ fn start_trace_route_on_v4(
                                             is_last: true,
                                         })
                                         .unwrap();
+                                        break;
                                     } else {
                                         println!(
                                             "UNEXPECTED ICMP PACKET WITH <{:?}>",
@@ -432,13 +441,19 @@ fn start_trace_route_on_v4(
             }
             tries += 1;
             if tries >= max_tries && !has_changed {
+                tx.send(HopFound {
+                    addr: None,
+                    hop_count: i,
+                    tries,
+                    is_last: false,
+                })
+                .unwrap();
                 tries = 0;
                 i += 1;
                 has_changed = false;
             }
         }
     });
-    handle.join();
 }
 
 fn start_trace_route_on_v6(
@@ -525,6 +540,7 @@ fn start_trace_route_on_v6(
                                             is_last: true,
                                         })
                                         .unwrap();
+                                        break;
                                     } else {
                                         println!(
                                             "UNEXPECTED ICMP PACKET WITH <{:?}>",
@@ -541,6 +557,7 @@ fn start_trace_route_on_v6(
                                             is_last: true,
                                         })
                                         .unwrap();
+                                        break;
                                     } else {
                                         println!(
                                             "UNEXPECTED ICMP PACKET WITH <{:?}>",
@@ -557,13 +574,19 @@ fn start_trace_route_on_v6(
             }
             tries += 1;
             if tries >= max_tries && !has_changed {
+                tx.send(HopFound {
+                    addr: None,
+                    hop_count: i,
+                    tries,
+                    is_last: false,
+                })
+                .unwrap();
                 tries = 0;
                 i += 1;
                 has_changed = false;
             }
         }
     });
-    handle.join();
 }
 
 fn icmp_checksum(packet: &echo_request::MutableEchoRequestPacket) -> u16be {
@@ -575,7 +598,52 @@ fn icmpv6_checksum(packet: &MutableIcmpv6Packet) -> u16be {
 }
 
 pub fn traceroute(
-
+    max_rtt: Option<u16>,
+    max_ttl: Option<u8>,
+    begin_ttl: Option<u8>,
+    max_tries: Option<u16>,
+    timeout: Option<u64>,
+    port: Option<u16>,
+    size: Option<usize>,
+    addr: IpAddr,
+    is_udp: Option<bool>,
 ) {
+    let protocol = match is_udp {
+        Some(p) => {
+            if p {
+                Some(TraceRouteProtocol::Udp)
+            } else {
+                Some(TraceRouteProtocol::Icmp)
+            }
+        }
+        None => None
+    };
 
+    let (tracer, results) = TraceRoute::new(
+        max_rtt, max_ttl, begin_ttl, max_tries, timeout, port, size, addr, protocol,
+    ).unwrap();
+
+    tracer.run_trace_route();
+    loop {
+        match results.recv() {
+            Ok(result) => {
+                if result.is_last {
+                    println!("HOP<{}> <==> DESTINATION<{}>", result.hop_count, result.addr.unwrap());
+                    break;
+                } else if result.hop_count == 1 {
+                    println!("HOP<{}> <==> GATEWAY<{}>", result.hop_count, result.addr.unwrap());
+                } else {
+                    match result.addr {
+                        Some(addr) => {
+                            println!("HOP<{}> <==> <{}>", result.hop_count, addr);
+                        }
+                        _ => {
+                            println!("HOP<{}> <==> NO REPLY", result.hop_count);
+                        }
+                    }
+                }
+            }
+            Err(_) => panic!("Worker threads disconnected before the route was found!"),
+        }
+    }
 }
