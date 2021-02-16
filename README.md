@@ -50,7 +50,7 @@ skywalker --help
 /____/_/|_|\__, / |__/|__/\__,_/_/_/|_|\___/_/
           /____/
 
-0.1.2
+0.2.0
 Tooraj Taraz <tooraj.info@gmail.com>
 SKYWALKER is a simple port and packet sniffer.
 
