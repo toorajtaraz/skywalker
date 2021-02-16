@@ -58,7 +58,7 @@ impl fmt::Display for Arguments {
 
 pub fn get_args() -> Result<Arguments, String> {
     let matches = App::new(format!("{}", ansi_term::Color::Red.paint("         __                        ____            \n   _____/ /____  ___      ______ _/ / /_____  _____\n  / ___/ //_/ / / / | /| / / __ `/ / //_/ _ \\/ ___/\n (__  ) ,< / /_/ /| |/ |/ / /_/ / / ,< /  __/ /    \n/____/_/|_|\\__, / |__/|__/\\__,_/_/_/|_|\\___/_/     \n          /____/                                  \n\n")))
-                          .version("\r0.1.2")
+                          .version("\r0.2.0")
                           .author("Tooraj Taraz <tooraj.info@gmail.com>")
                           .about("SKYWALKER is a simple port and packet sniffer.")
                           .arg(Arg::with_name("threads")

@@ -1,13 +1,14 @@
 # SKYWALKER
 
-Skywalker is a cli application written in RUST for utilizing network monitoring. It can sniff ports and packets!
+Skywalker is a cli application written in RUST for utilizing network monitoring. It can sniff ports and packets, ping multiple hosts simultaneously and tracerout any host!
+It supports IPV4/6 ping and tracerouting.
 
 ## Installation
 
 The binary is already built for you! Just make sure you have libpcap installed on your system. if you really want to build the application your self:
 
 ```bash
-cargo build --release --target x86_64-unknown-linux-gnu 
+cargo build --release
 sudo cp ./target/x86_64-unknown-linux-gnu/release/skywalker /bin/
 ```
 or just simply copy provided binary to /bin directory or add to your desired folder in PATH.
@@ -35,12 +36,12 @@ You can capture packages from all of your interfaces, even bus, Dbus and bluetoo
 
 ```bash
 skywalker --help
-         __                        ____            
+         __                        ____
    _____/ /____  ___      ______ _/ / /_____  _____
   / ___/ //_/ / / / | /| / / __ `/ / //_/ _ \/ ___/
- (__  ) ,< / /_/ /| |/ |/ / /_/ / / ,< /  __/ /    
-/____/_/|_|\__, / |__/|__/\__,_/_/_/|_|\___/_/     
-          /____/                                  
+ (__  ) ,< / /_/ /| |/ |/ / /_/ / / ,< /  __/ /
+/____/_/|_|\__, / |__/|__/\__,_/_/_/|_|\___/_/
+          /____/
 
 0.1.2
 Tooraj Taraz <tooraj.info@gmail.com>
@@ -59,11 +60,21 @@ FLAGS:
                      capturing verbosity will provide more and more information/errors.
 
 OPTIONS:
-    -C, --capture <index>    Capture packages from interface with index you get from interface list. Give 0 for default
-                             interface.
-    -j, --threads <num>      Sets number of threads with maximum allowed value of five times cpu cores, its default
-                             value is equal to number of cores.
-    -t, --timeout <num>      Sets timeout in nanoseconds, default value is 1^e9 or 1 second
+    -C, --capture <index>            Capture packages from interface with index you get from interface list. Give 0 for
+                                     default interface.
+        --max_tries <MAX TRIES>      Sets number of times we resend packet and wait for ICMP reply.
+        --max_ttl <MAX TTL>          Sets maximum number of HOPs.
+    -p, --ping <host list>           Sets hosts for executing ping, it should be within parentheses and seprated by one
+                                     space like: "8.8.8.8 google.com apple.com"
+        --port <PORT>                Sets starting port for tracing.
+        --protocol <PROTOCOL>        Sets protocol used for tracing, Expected values: "UDP, ICMP"
+        --size <SIZE>                Sets size of packets sent for tracing.
+        --start_ttl <MIN TTL>        Sets TTL to begin with.
+    -j, --threads <num>              Sets number of threads with maximum allowed value of five times cpu cores, its
+                                     default value is equal to number of cores.
+    -t, --timeout <num>              Sets timeout in nanoseconds, default value is 1^e9 or 1 second.
+        --timeout_trace <TIMEOUT>    Sets timeout in microseconds, default is 200ms.
+    -r, --traceroute <host or ip>    Route trace provided host or ip.
 
 ARGS:
     <IP>    Sets the ip address for port sniffing
