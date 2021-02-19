@@ -1,28 +1,37 @@
 extern crate pnet;
+use pnet::packet::icmp::echo_reply::EchoReplyPacket;
 use pnet::packet::icmp::echo_request;
 use pnet::packet::icmp::IcmpTypes;
 use pnet::packet::icmpv6::{Icmpv6Types, MutableIcmpv6Packet};
 use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::Packet;
 use pnet::packet::{icmp, icmpv6};
+use pnet::transport::icmpv6_packet_iter;
 use pnet::transport::transport_channel;
-use pnet::transport::TransportChannelType::Layer4;
+use pnet::transport::TransportChannelType::{Layer3, Layer4};
 use pnet::transport::TransportProtocol::{Ipv4, Ipv6};
-use pnet::transport::{icmp_packet_iter, icmpv6_packet_iter};
 use pnet::transport::{TransportReceiver, TransportSender};
 use pnet::util;
 use pnet_macros_support::types::*;
 use rand::random;
 use std::collections::BTreeMap;
-use std::net::IpAddr;
+use std::net::{self, IpAddr};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
-extern crate ctrlc;
 extern crate ansi_term;
+extern crate ctrlc;
 use ansi_term::Colour::RGB;
-use std::io::{stdout, Write};
+use pnet::transport::*;
+use std::io::{self, stdout, ErrorKind, Write};
+use std::mem;
+transport_channel_iterator!(
+    EchoReplyPacket,
+    EchoReplyTransportChannelIterator,
+    echo_iter
+);
 
 enum PingResultState {
     NoReply,
@@ -33,6 +42,7 @@ struct PingResult {
     pub state: PingResultState,
     pub ping_address: IpAddr,
     pub rtt: Duration,
+    pub seq: u16,
 }
 
 type AddressToBePinged = IpAddr;
@@ -41,7 +51,7 @@ type PingRes = Result<(Ping, Receiver<PingResult>), String>;
 
 struct Ping {
     max_rtt: Arc<Duration>,
-    addresses: Arc<Mutex<BTreeMap<AddressToBePinged, (bool, u64, u64)>>>,
+    addresses: Arc<Mutex<BTreeMap<AddressToBePinged, (bool, u64, u64, u16)>>>,
     size: usize,
     results_sender: Sender<PingResult>,
     transport_tx: Arc<Mutex<TransportSender>>,
@@ -56,7 +66,7 @@ struct Ping {
 
 impl Ping {
     fn new(max_rtt: Option<u16>) -> PingRes {
-        let addresses: BTreeMap<AddressToBePinged, (bool, u64, u64)> = BTreeMap::new();
+        let addresses: BTreeMap<AddressToBePinged, (bool, u64, u64, u16)> = BTreeMap::new();
         let (send_handle, recieve_handle) = channel();
         let protocol = Layer4(Ipv4(IpNextHeaderProtocols::Icmp));
         let (transport_tx, transport_rx) = match transport_channel(4096, protocol) {
@@ -93,7 +103,7 @@ impl Ping {
     }
 
     fn add_address(&self, addr: IpAddr) {
-        self.addresses.lock().unwrap().insert(addr, (true, 0, 0));
+        self.addresses.lock().unwrap().insert(addr, (true, 0, 0, 0));
     }
 
     fn run_pings(&self) {
@@ -133,7 +143,7 @@ impl Ping {
         let run = self.run.clone();
         thread::spawn(move || {
             let mut receiver = transport_rx.lock().unwrap();
-            let mut iter = icmp_packet_iter(&mut receiver);
+            let mut iter = echo_iter(&mut receiver);
             loop {
                 match iter.next() {
                     Ok((packet, addr)) => {
@@ -143,6 +153,7 @@ impl Ping {
                                 state: PingResultState::Replied,
                                 ping_address: addr,
                                 rtt: Instant::now().duration_since(*start_time),
+                                seq: packet.get_sequence_number(),
                             }) {
                                 Ok(_) => {}
                                 Err(e) => {
@@ -182,6 +193,7 @@ impl Ping {
                                 state: PingResultState::Replied,
                                 ping_address: addr,
                                 rtt: Instant::now().duration_since(*start_time),
+                                seq: 0,
                             }) {
                                 Ok(_) => {}
                                 Err(e) => {
@@ -202,13 +214,17 @@ impl Ping {
     }
 }
 
-fn send_echo(tx: &mut TransportSender, addr: IpAddr, size: usize) -> Result<usize, std::io::Error> {
+fn send_echo(
+    tx: &mut TransportSender,
+    addr: IpAddr,
+    size: usize,
+    seq: u16,
+) -> Result<usize, std::io::Error> {
     let mut vec: Vec<u8> = vec![0; size];
     let mut echo_packet = echo_request::MutableEchoRequestPacket::new(&mut vec[..]).unwrap();
-    echo_packet.set_sequence_number(random::<u16>());
+    echo_packet.set_sequence_number(seq);
     echo_packet.set_identifier(random::<u16>());
     echo_packet.set_icmp_type(IcmpTypes::EchoRequest);
-
     let csum = icmp_checksum(&echo_packet);
     echo_packet.set_checksum(csum);
 
@@ -247,16 +263,17 @@ fn do_ping(
     thread_rx: Arc<Mutex<Receiver<PingResult>>>,
     tx: Arc<Mutex<TransportSender>>,
     txv6: Arc<Mutex<TransportSender>>,
-    addresses: Arc<Mutex<BTreeMap<AddressToBePinged, (bool, u64, u64)>>>,
+    addresses: Arc<Mutex<BTreeMap<AddressToBePinged, (bool, u64, u64, u16)>>>,
     max_rtt: Arc<Duration>,
 ) {
     let mut min_rtt_r = std::f64::MAX;
     let mut max_rtt_r = std::f64::MIN;
     loop {
-        for (address, (has_answered, send, _)) in addresses.lock().unwrap().iter_mut() {
+        for (address, (has_answered, send, _, seq)) in addresses.lock().unwrap().iter_mut() {
             match if address.is_ipv4() {
                 *send += 1;
-                send_echo(&mut tx.lock().unwrap(), *address, size)
+                *seq += 1;
+                send_echo(&mut tx.lock().unwrap(), *address, size, *seq)
             } else if address.is_ipv6() {
                 *send += 1;
                 send_echov6(&mut txv6.lock().unwrap(), *address, size)
@@ -264,7 +281,14 @@ fn do_ping(
                 Ok(0)
             } {
                 Err(e) => {
-                    println!("{}", RGB(255,70,70).paint(format!("Failed to send ping to {:?}: {}", (*address), e)));
+                    println!(
+                        "{}",
+                        RGB(255, 70, 70).paint(format!(
+                            "Failed to send ping to {:?}: {}",
+                            (*address),
+                            e
+                        ))
+                    );
                 }
                 _ => {}
             }
@@ -280,33 +304,39 @@ fn do_ping(
                 .unwrap()
                 .recv_timeout(Duration::from_millis(100))
             {
-                Ok(result) => {
-                    match result {
-                        PingResult { ping_address: addr, rtt: _, state: PingResultState::Replied} => {
-                            let ref mut targets = addresses.lock().unwrap();
-                            let res = targets.get_mut(&addr);
-                            if let  Some((target, _, recieved)) = res {
-                                *target = true;
-                                *recieved += 1;
-                                if result.rtt.as_secs_f64() > max_rtt_r {
-                                    max_rtt_r = result.rtt.as_secs_f64();
-                                }
-                                if result.rtt.as_secs_f64() < min_rtt_r {
-                                    min_rtt_r = result.rtt.as_secs_f64();
-                                }
-                                match results_sender.send(result) {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        if *run.lock().unwrap() {
-                                            panic!("Error sending ping result on channel: {}", e)
-                                        }
+                Ok(result) => match result {
+                    PingResult {
+                        ping_address: addr,
+                        rtt: _,
+                        state: PingResultState::Replied,
+                        seq: seq_num,
+                    } => {
+                        let ref mut targets = addresses.lock().unwrap();
+                        let res = targets.get_mut(&addr);
+                        if let Some((target, _, recieved, seq)) = res {
+                            if *seq != seq_num {
+                                continue;
+                            }
+                            *target = true;
+                            *recieved += 1;
+                            if result.rtt.as_secs_f64() > max_rtt_r {
+                                max_rtt_r = result.rtt.as_secs_f64();
+                            }
+                            if result.rtt.as_secs_f64() < min_rtt_r {
+                                min_rtt_r = result.rtt.as_secs_f64();
+                            }
+                            match results_sender.send(result) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    if *run.lock().unwrap() {
+                                        panic!("Error sending ping result on channel: {}", e)
                                     }
                                 }
                             }
                         }
-                        _ => {}
                     }
-                }
+                    _ => {}
+                },
                 Err(_) => {
                     let start_time = timer.read().unwrap();
                     if Instant::now().duration_since(*start_time) > *max_rtt {
@@ -315,9 +345,14 @@ fn do_ping(
                 }
             }
         }
-        for (address, (has_answered, _, _)) in addresses.lock().unwrap().iter() {
+        for (address, (has_answered, _, _, _)) in addresses.lock().unwrap().iter() {
             if *has_answered == false {
-                match results_sender.send(PingResult { ping_address: *address, state: PingResultState::NoReply, rtt: Duration::new(0, 0)}) {
+                match results_sender.send(PingResult {
+                    ping_address: *address,
+                    state: PingResultState::NoReply,
+                    rtt: Duration::new(0, 0),
+                    seq: 0,
+                }) {
                     Ok(_) => {}
                     Err(e) => {
                         if *run.lock().unwrap() {
@@ -329,11 +364,24 @@ fn do_ping(
         }
         if !(*run.lock().unwrap()) {
             stdout().flush().unwrap();
-            println!("\n{}", RGB(1, 204, 204).paint("-------------statistics------------"));
-            for (address, (_, send, recieved)) in addresses.lock().unwrap().iter() {
-                println!("For IP<{}> <{}> packet(s) sent and <{}> packet(s) recieved, loss = {}%", RGB(223, 97, 0).paint(format!("{}", address)), RGB(255, 255, 51).paint(format!("{}", send)), RGB(51, 255, 51).paint(format!("{}", recieved)), RGB(255, 102, 102).paint(format!("{}", ((send - recieved) * 100) / send)));
+            println!(
+                "\n{}",
+                RGB(1, 204, 204).paint("-------------statistics------------")
+            );
+            for (address, (_, send, recieved, _)) in addresses.lock().unwrap().iter() {
+                println!(
+                    "For IP<{}> <{}> packet(s) sent and <{}> packet(s) recieved, loss = {}%",
+                    RGB(223, 97, 0).paint(format!("{}", address)),
+                    RGB(255, 255, 51).paint(format!("{}", send)),
+                    RGB(51, 255, 51).paint(format!("{}", recieved)),
+                    RGB(255, 102, 102).paint(format!("{}", ((send - recieved) * 100) / send))
+                );
             }
-            println!("MINIMUM RTT=<{}>ms, MAXIMUM RTT=<{}>ms", RGB(178, 102, 255).paint(format!("{}", min_rtt_r * 1000.0)), RGB(178, 102, 255).paint(format!("{}", max_rtt_r * 1000.0)));
+            println!(
+                "MINIMUM RTT=<{}>ms, MAXIMUM RTT=<{}>ms",
+                RGB(178, 102, 255).paint(format!("{}", min_rtt_r * 1000.0)),
+                RGB(178, 102, 255).paint(format!("{}", max_rtt_r * 1000.0))
+            );
             std::process::exit(0x0100);
         }
     }
@@ -345,15 +393,16 @@ pub fn ping_hosts(hosts: Vec<IpAddr>) {
         Err(e) => panic!("Error creating ping util: {}", e),
     };
     let temp_run = ping.run.clone();
-    ctrlc::set_handler(move||{
+    ctrlc::set_handler(move || {
         stdout().flush().unwrap();
         let mut temp = temp_run.lock().unwrap();
         *temp = false;
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
     ping.start_listening();
     for host in hosts {
         ping.add_address(host);
-    } 
+    }
     ping.run_pings();
 
     loop {
@@ -361,12 +410,20 @@ pub fn ping_hosts(hosts: Vec<IpAddr>) {
             Ok(result) => match result.state {
                 PingResultState::NoReply => {
                     if *(ping.run.lock().unwrap()) {
-                        println!("No reply from IP<{}> until this iteration.", RGB(223, 97, 0).paint(format!("{}", result.ping_address)));
+                        println!(
+                            "No reply from IP<{}>.",
+                            RGB(223, 97, 0).paint(format!("{}", result.ping_address))
+                        );
                     }
                 }
                 PingResultState::Replied => {
                     if *(ping.run.lock().unwrap()) {
-                        println!("Reply from IP<{}> in {}.", RGB(223, 97, 0).paint(format!("{}", result.ping_address)), RGB(102, 255, 255).paint(format!("{:?}", result.rtt)));
+                        println!(
+                            "Reply from IP<{}> in {} seq={}.",
+                            RGB(223, 97, 0).paint(format!("{}", result.ping_address)),
+                            RGB(102, 255, 255).paint(format!("{:?}", result.rtt)),
+                            RGB(102, 255, 255).paint(format!("{:?}", result.seq))
+                        );
                     }
                 }
             },
