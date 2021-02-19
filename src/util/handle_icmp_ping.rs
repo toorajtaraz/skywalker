@@ -361,7 +361,7 @@ pub fn ping_hosts(hosts: Vec<IpAddr>) {
             Ok(result) => match result.state {
                 PingResultState::NoReply => {
                     if *(ping.run.lock().unwrap()) {
-                        println!("No reply from IP<{}>.", RGB(223, 97, 0).paint(format!("{}", result.ping_address)));
+                        println!("No reply from IP<{}> until this iteration.", RGB(223, 97, 0).paint(format!("{}", result.ping_address)));
                     }
                 }
                 PingResultState::Replied => {
