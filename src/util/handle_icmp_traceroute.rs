@@ -1,15 +1,19 @@
 extern crate pnet;
+extern crate ansi_term;
+extern crate ctrlc;
+
+use ansi_term::Colour::RGB;
 use pnet::datalink;
-use pnet::packet::icmp::echo_request;
+use pnet::packet::Packet;
 use pnet::packet::icmp::IcmpTypes;
+use pnet::packet::icmp::echo_request;
 use pnet::packet::icmpv6::{Icmpv6Types, MutableIcmpv6Packet};
 use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::Packet;
 use pnet::packet::{icmp, icmpv6, ipv4, ipv6, udp};
-use pnet::transport::transport_channel;
 use pnet::transport::TransportChannelType::{Layer3, Layer4};
 use pnet::transport::TransportProtocol::Ipv4;
 use pnet::transport::TransportSender;
+use pnet::transport::transport_channel;
 use pnet::transport::{icmp_packet_iter, icmpv6_packet_iter};
 use pnet::util;
 use pnet_macros_support::types::*;
@@ -19,9 +23,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
-extern crate ansi_term;
-extern crate ctrlc;
-use ansi_term::Colour::RGB;
 
 #[derive(Copy, Clone)]
 enum TraceRouteProtocol {
