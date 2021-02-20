@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 extern crate pcap;
-use pcap::Device;
 extern crate ansi_term;
-use crate::packet_parser::{self, parse_packet};
+
 use ansi_term::Color;
+use crate::packet_parser::{self, parse_packet};
+use pcap::Device;
 
 pub fn print_devices() {
     let mut i: u16 = 1;
