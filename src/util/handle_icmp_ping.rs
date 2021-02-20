@@ -1,32 +1,34 @@
 extern crate pnet;
+extern crate ansi_term;
+extern crate ctrlc;
+
+use ansi_term::Colour::RGB;
+use pnet::packet::Packet;
+use pnet::packet::icmp::IcmpTypes;
 use pnet::packet::icmp::echo_reply::EchoReplyPacket;
 use pnet::packet::icmp::echo_request;
-use pnet::packet::icmp::IcmpTypes;
 use pnet::packet::icmpv6::{Icmpv6Types, MutableIcmpv6Packet};
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
-use pnet::packet::Packet;
 use pnet::packet::{icmp, icmpv6};
-use pnet::transport::icmpv6_packet_iter;
-use pnet::transport::transport_channel;
+use pnet::transport::*;
 use pnet::transport::TransportChannelType::{Layer3, Layer4};
 use pnet::transport::TransportProtocol::{Ipv4, Ipv6};
+use pnet::transport::icmpv6_packet_iter;
+use pnet::transport::transport_channel;
 use pnet::transport::{TransportReceiver, TransportSender};
 use pnet::util;
 use pnet_macros_support::types::*;
 use rand::random;
 use std::collections::BTreeMap;
+use std::io::{self, stdout, ErrorKind, Write};
+use std::mem;
 use std::net::{self, IpAddr};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
-extern crate ansi_term;
-extern crate ctrlc;
-use ansi_term::Colour::RGB;
-use pnet::transport::*;
-use std::io::{self, stdout, ErrorKind, Write};
-use std::mem;
+
 transport_channel_iterator!(
     EchoReplyPacket,
     EchoReplyTransportChannelIterator,
