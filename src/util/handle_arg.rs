@@ -12,16 +12,16 @@
 
 <]*/
 extern crate clap;
+extern crate ansi_term;
+extern crate num_cpus;
+
+use ansi_term::Colour::RGB;
 use clap::{App, Arg};
+use num_cpus::get;
 use std::fmt;
 use std::net::IpAddr;
-use std::str::FromStr;
-extern crate ansi_term;
-use ansi_term::Colour::RGB;
-
-extern crate num_cpus;
-use num_cpus::get;
 use std::net::ToSocketAddrs;
+use std::str::FromStr;
 
 pub enum Modes {
     PrintDevices,
