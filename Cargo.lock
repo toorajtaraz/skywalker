@@ -606,9 +606,9 @@ checksum = "4d58d1b70b004888f764dfbf6a26a3b0342a1632d33968e4a179d8011c760614"
 
 [[package]]
 name = "librping"
-version = "0.1.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5c7c8ac5ae885261e4123202c76c8f6e72a3b872f150b2e6f14b31dd37b8eee"
+checksum = "b1cc23d3d361c72f9a43c961413a6153caffcacaacd38e32c58f92aa7cd8fb59"
 dependencies = [
  "ansi_term 0.12.1",
  "libc",
@@ -621,9 +621,9 @@ dependencies = [
 
 [[package]]
 name = "librtraceroute"
-version = "0.1.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "016c0b5b5fbd89694c40c2522716d568208094183dc017592112265de7a2251e"
+checksum = "2e26f1aa7fc290944fa8ab374507fba7740b8578a81b457de9e7dd490dfb5447"
 dependencies = [
  "ansi_term 0.12.1",
  "libc",
@@ -1311,18 +1311,12 @@ dependencies = [
  "dns-parser",
  "httparse",
  "hwaddr",
- "libc",
  "librping",
  "librtraceroute",
  "nom",
  "num_cpus",
  "pcap",
  "pktparse",
- "pnet",
- "pnet_macros_support",
- "pnet_packet",
- "pnet_sys",
- "rand",
  "tls-parser",
 ]
 

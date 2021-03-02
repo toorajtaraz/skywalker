@@ -7,8 +7,8 @@ use ansi_term::Colour::RGB;
 use std::io::{stdout, Write};
 use std::net::IpAddr;
 
-pub fn ping_hosts(hosts: Vec<IpAddr>) {
-    let (ping, results) = match Ping::new(None) {
+pub fn ping_hosts(hosts: Vec<IpAddr>, max_rtt: Option<u16>, size: Option<usize>) {
+    let (ping, results) = match Ping::new(max_rtt, size) {
         Ok((pinger, results)) => (pinger, results),
         Err(e) => panic!("Error creating ping util: {}", e),
     };

@@ -11,8 +11,8 @@
 
 
 <]*/
-extern crate clap;
 extern crate ansi_term;
+extern crate clap;
 extern crate num_cpus;
 
 use ansi_term::Colour::RGB;
@@ -47,6 +47,8 @@ pub struct Arguments {
     pub port: Option<u16>,
     pub size: Option<usize>,
     pub protocol: Option<bool>,
+    pub max_rtt: Option<u16>,
+    pub size_ping: Option<usize>,
 }
 
 impl fmt::Display for Arguments {
@@ -134,11 +136,17 @@ pub fn get_args() -> Result<Arguments, String> {
                                .help("Sets starting port for tracing.")
                                .requires("trace")
                                .takes_value(true))
-                          .arg(Arg::with_name("size")
-                               .long("size")
+                          .arg(Arg::with_name("size_trace")
+                               .long("size_trace")
                                .value_name("SIZE")
                                .help("Sets size of packets sent for tracing.")
                                .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("size_ping")
+                               .long("size_ping")
+                               .value_name("SIZE")
+                               .help("Sets size of packets sent for ping.")
+                               .requires("ping")
                                .takes_value(true))
                           .arg(Arg::with_name("protocol")
                                .long("protocol")
@@ -151,6 +159,12 @@ pub fn get_args() -> Result<Arguments, String> {
                                .value_name("TIMEOUT")
                                .help("Sets timeout in microseconds, default is 200ms.")
                                .requires("trace")
+                               .takes_value(true))
+                          .arg(Arg::with_name("timeout_ping")
+                               .long("timeout_ping")
+                               .value_name("TIMEOUT")
+                               .help("Sets timeout in microseconds, default is 2000ms.")
+                               .requires("ping")
                                .takes_value(true))
                           .get_matches();
 
@@ -174,6 +188,8 @@ pub fn get_args() -> Result<Arguments, String> {
             size: None,
             host: None,
             protocol: None,
+            max_rtt: None,
+            size_ping: None,
         };
         match matches.value_of("max_tries") {
             Some(max_tries) => match max_tries.parse::<u16>() {
@@ -223,7 +239,7 @@ pub fn get_args() -> Result<Arguments, String> {
             },
             _ => {}
         }
-        match matches.value_of("size") {
+        match matches.value_of("size_trace") {
             Some(size) => match size.parse::<usize>() {
                 Ok(size) => {
                     args.size = Some(size);
@@ -316,7 +332,7 @@ pub fn get_args() -> Result<Arguments, String> {
                 }
             };
         }
-        return Ok(Arguments {
+        let mut args = Arguments {
             threads: None,
             timeout: None,
             verbose: None,
@@ -332,7 +348,34 @@ pub fn get_args() -> Result<Arguments, String> {
             size: None,
             host: None,
             protocol: None,
-        });
+            max_rtt: None,
+            size_ping: None,
+        };
+        match matches.value_of("size_ping") {
+            Some(size) => match size.parse::<usize>() {
+                Ok(size) => {
+                    args.size = Some(size);
+                }
+                Err(_) => {
+                    err.push_str(format!("size be unsigned integer.").as_str());
+                    return Err(err);
+                }
+            },
+            _ => {}
+        }
+        match matches.value_of("timeout_ping") {
+            Some(port) => match port.parse::<u16>() {
+                Ok(port) => {
+                    args.port = Some(port);
+                }
+                Err(_) => {
+                    err.push_str(format!("timeout must be unsigned 16 bit integer.").as_str());
+                    return Err(err);
+                }
+            },
+            _ => {}
+        }
+        return Ok(args);
     }
     let cpu = format!("{}", get());
     let cpu = cpu.as_str();
@@ -367,6 +410,8 @@ pub fn get_args() -> Result<Arguments, String> {
             size: None,
             host: None,
             protocol: None,
+            max_rtt: None,
+            size_ping: None,
         });
     } else if ip.contains("was") && index.contains("was") && matches.is_present("listDev") {
         return Ok(Arguments {
@@ -385,6 +430,8 @@ pub fn get_args() -> Result<Arguments, String> {
             size: None,
             host: None,
             protocol: None,
+            max_rtt: None,
+            size_ping: None,
         });
     } else if ip.contains("was") {
         err.push_str("no parameters were provided.");
@@ -444,5 +491,7 @@ pub fn get_args() -> Result<Arguments, String> {
         size: None,
         host: None,
         protocol: None,
+        max_rtt: None,
+        size_ping: None,
     })
 }

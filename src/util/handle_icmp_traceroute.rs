@@ -1,4 +1,3 @@
-extern crate pnet;
 extern crate ansi_term;
 extern crate librtraceroute;
 

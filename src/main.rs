@@ -20,7 +20,7 @@ fn main() {
             }
             handle_arg::Modes::PrintDevices => packet_sniffer::print_devices(),
             handle_arg::Modes::Ping => {
-                handle_icmp_ping::ping_hosts(args.hosts.unwrap());
+                handle_icmp_ping::ping_hosts(args.hosts.unwrap(), args.max_rtt, args.size_ping);
             }
             handle_arg::Modes::TraceRoute => {
                 handle_icmp_traceroute::traceroute(

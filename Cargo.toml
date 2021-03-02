@@ -6,14 +6,8 @@ edition = "2018"
 
 
 [dependencies]
-librping = "0.1.1"
-librtraceroute = "0.1.1"
-rand = "0.7"
-pnet = "0.27.2"
-pnet_macros_support = "0.27.2"
-pnet_packet = "0.27.2"
-pnet_sys = "0.27.2"
-libc = "0.2.39"
+librping = "0.1.4"
+librtraceroute = "0.1.4"
 ansi_term = "0.12"
 num_cpus = "1.0"
 clap = "2.33"
