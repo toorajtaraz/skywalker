@@ -354,7 +354,7 @@ pub fn get_args() -> Result<Arguments, String> {
         match matches.value_of("size_ping") {
             Some(size) => match size.parse::<usize>() {
                 Ok(size) => {
-                    args.size = Some(size);
+                    args.size_ping = Some(size);
                 }
                 Err(_) => {
                     err.push_str(format!("size be unsigned integer.").as_str());
@@ -364,9 +364,9 @@ pub fn get_args() -> Result<Arguments, String> {
             _ => {}
         }
         match matches.value_of("timeout_ping") {
-            Some(port) => match port.parse::<u16>() {
-                Ok(port) => {
-                    args.port = Some(port);
+            Some(timeout) => match timeout.parse::<u16>() {
+                Ok(timeout) => {
+                    args.max_rtt = Some(timeout);
                 }
                 Err(_) => {
                     err.push_str(format!("timeout must be unsigned 16 bit integer.").as_str());

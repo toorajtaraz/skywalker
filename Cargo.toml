@@ -6,7 +6,7 @@ edition = "2018"
 
 
 [dependencies]
-librping = "0.1.4"
+librping = "0.1.5"
 librtraceroute = "0.1.4"
 ansi_term = "0.12"
 num_cpus = "1.0"
