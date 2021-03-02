@@ -6,7 +6,8 @@ edition = "2018"
 
 
 [dependencies]
-librping = "0.1.0"
+librping = "0.1.1"
+librtraceroute = "0.1.1"
 rand = "0.7"
 pnet = "0.27.2"
 pnet_macros_support = "0.27.2"
