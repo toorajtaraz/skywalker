@@ -5,18 +5,25 @@ It supports IPV4/6 ping and tracerouting.
 
 ## Installation
 
-The binary is already built for you! Just make sure you have libpcap installed on your system. if you really want to build the application your self:
+To build and install this project use commands below:
 
 ```bash
 cargo build --release
-sudo cp ./target/x86_64-unknown-linux-gnu/release/skywalker /bin/
+sudo cp ./target/release/skywalker /bin/
 ```
-or just simply copy provided binary to /bin directory or add to your desired folder in PATH.
+
+If you are on arch based distros, you can run:
+
+```bash
+yay -S skywalker
+```
+
+Of course you can use any AUR helper that you desire!
 
 ## Abilities
 Port sniffer:
 
-Currently we support multi thread port sniffing with different levels of verbosity, in near future we will add famous port scan and range filter support.
+Currently we support multi thread port sniffing with different levels of verbosity, in near future we will add range filter support.
 
 Packet sniffer:
 
@@ -30,19 +37,23 @@ At the moment there are plenty protocols that we support :
  
 There is an option for you too see a list containing all your interfaces.
 
+You can capture packages from all of your interfaces, even bus, Dbus and bluetooth, but non network-related interfaces will not be parsed but still you can review raw payload and length of packet and time stamps.
+
 Ping :
 
-Unline other ping implementations it can ping multiple hosts simultaneously, Also it tries to find ipv6 address of any host and if that exists skywalker will ping that too.
+Unlike other ping implementations it can ping multiple hosts simultaneously, Also it tries to find ipv6 address of any host and if that exists skywalker will ping that too.
+
+The ping library used is implemented by me at [librping](https://github.com/toorajtaraz/librping)
 
 Traceroute :
 
 You can almost set every possible variable for tracerouting using this tool, including protocol used for route tracing and packet size.
 
-You can capture packages from all of your interfaces, even bus, Dbus and bluetooth, but non network-related interfaces will not be parsed but still you can review raw payload and length of packet and time stamps.
+The route tracing library used is implemented by me at [librtraceroute](https://github.com/toorajtaraz/librtraceroute)
+
 ## Usage
 
-```bash
-skywalker --help
+```
          __                        ____
    _____/ /____  ___      ______ _/ / /_____  _____
   / ___/ //_/ / / / | /| / / __ `/ / //_/ _ \/ ___/
@@ -75,11 +86,13 @@ OPTIONS:
                                      space like: "8.8.8.8 google.com apple.com"
         --port <PORT>                Sets starting port for tracing.
         --protocol <PROTOCOL>        Sets protocol used for tracing, Expected values: "UDP, ICMP"
-        --size <SIZE>                Sets size of packets sent for tracing.
+        --size_ping <SIZE>           Sets size of packets sent for ping.
+        --size_trace <SIZE>          Sets size of packets sent for tracing.
         --start_ttl <MIN TTL>        Sets TTL to begin with.
     -j, --threads <num>              Sets number of threads with maximum allowed value of five times cpu cores, its
                                      default value is equal to number of cores.
     -t, --timeout <num>              Sets timeout in nanoseconds, default value is 1^e9 or 1 second.
+        --timeout_ping <TIMEOUT>     Sets timeout in microseconds, default is 2000ms.
         --timeout_trace <TIMEOUT>    Sets timeout in microseconds, default is 200ms.
     -r, --traceroute <host or ip>    Route trace provided host or ip.
 
@@ -89,6 +102,3 @@ ARGS:
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-Please make sure to update tests as appropriate.
-
