@@ -1,6 +1,6 @@
 [package]
 name = "skywalker"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["tooraj taraz <tooraj.info@gmail.com>"]
 edition = "2018"
 

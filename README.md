@@ -61,7 +61,7 @@ The route tracing library used is implemented by me at [librtraceroute](https://
 /____/_/|_|\__, / |__/|__/\__,_/_/_/|_|\___/_/
           /____/
 
-0.2.0
+0.2.1
 Tooraj Taraz <tooraj.info@gmail.com>
 SKYWALKER is a simple port and packet sniffer.
 
