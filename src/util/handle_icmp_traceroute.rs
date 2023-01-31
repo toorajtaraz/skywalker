@@ -1,8 +1,8 @@
 extern crate ansi_term;
 extern crate librtraceroute;
 
-use librtraceroute::*;
 use ansi_term::Colour::RGB;
+use librtraceroute::*;
 use std::net::IpAddr;
 
 pub fn traceroute(
