@@ -201,9 +201,9 @@ checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
 
 [[package]]
 name = "librping"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36e966c17f4de64949e800583e24654fd405639c00aca8b508049fb111b18157"
+checksum = "cb21f206580063687b3867c1888fe9bc8a67784b8d801649ce982de86b326ac6"
 dependencies = [
  "ansi_term",
  "libc",
@@ -216,9 +216,9 @@ dependencies = [
 
 [[package]]
 name = "librtraceroute"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebf3f8414842fb3d726d1ef671c26fb4db39ff0a3209fe43d53968890f391f7c"
+checksum = "aee1b117c5bbbe411fb35388de7be88854da37cd832fa83102d68fabde9ebe43"
 dependencies = [
  "ansi_term",
  "libc",
